@@ -918,7 +918,6 @@ void RollingTheBall::BuildShapeGeometry()
 
 	// Define the SubmeshGeometry that cover different 
 	// regions of the vertex/index buffers.
-
 	SubmeshGeometry boxSubmesh;
 	boxSubmesh.IndexCount = (UINT)box.Indices32.size();
 	boxSubmesh.StartIndexLocation = boxIndexOffset;
@@ -1021,29 +1020,20 @@ void RollingTheBall::BuildShapeGeometry()
 void RollingTheBall::BuildCone()
 {
 	FbxLoader fbx;
-	std::vector<FbxLoader::FbxVertex> outFbxVertex;
 
-	fbx.LoadFBX(outFbxVertex);
+	std::vector<Vertex> vertices;
+	std::vector<std::int32_t> indices;
+	fbx.LoadFBX(vertices, indices);
 
-	if (outFbxVertex.size() == 0)
+	if (vertices.size() == 0)
 	{
 		MessageBox(0, L"cone not found", 0, 0);
 		return;
 	}
 
-	UINT vCount = 0;
-	vCount = outFbxVertex.size();
-
-	std::vector<Vertex> vertices(vCount);
-	std::vector<std::int32_t> indices(vCount);
-	for (UINT i = 0; i < vCount; ++i)
-	{
-		vertices[i].Pos.x = outFbxVertex[i].pos[0];
-		vertices[i].Pos.y = outFbxVertex[i].pos[1];
-		vertices[i].Pos.z = outFbxVertex[i].pos[2];
-
-		indices[i] = i + 1;
-	}
+	UINT vCount = 0, iCount = 0;
+	vCount = vertices.size();
+	iCount = indices.size();
 
 	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
 	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::int32_t);
@@ -1243,9 +1233,9 @@ void RollingTheBall::BuildRenderItems()
 	// Line
 	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
 	// Cone
-	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
 	//Tank because of size
-	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(0.05f,0.05f, 0.05f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
 
 	XMStoreFloat4x4(&lineRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	lineRitem->ObjCBIndex = objCBIndex++;

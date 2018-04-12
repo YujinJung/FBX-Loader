@@ -7,12 +7,7 @@ public:
 	FbxLoader();
 	~FbxLoader();
 
-	struct FbxVertex
-	{
-		float pos[3];
-	};
-
-	HRESULT LoadFBX(std::vector<FbxVertex>& pOutVertexVector);
+	HRESULT LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int32_t>& outIndexVector);
 
 private:
 
