@@ -9,207 +9,11 @@
 #include "../Common/UploadBuffer.h"
 #include "../Common/GeometryGenerator.h"
 #include "FrameResource.h"
-
-using Microsoft::WRL::ComPtr;
-using namespace DirectX;
-using namespace DirectX::PackedVector;
-
-const int gNumFrameResources = 3;
-
-struct CollisionSphere
-{
-	CollisionSphere() = default;
-
-	XMFLOAT3 originVector = { 0.0f, 0.0f, 0.0f };
-	float radius = 0.0f;
-};
-
-class PlayerInfo
-{
-private:
-	XMFLOAT3 mPos;
-	XMFLOAT3 mTarget;
-	float mYaw, mRoll;
-	float mRadius;
-	float mPlayerVelocity;
-	UINT score;
-
-public:
-	PlayerInfo() : mPos(0.0f, 2.0f, 0.0f), mTarget(0.0f, 2.0f, 15.0f), mRadius(2.0f), mPlayerVelocity(0.0f), mYaw(0.0f), mRoll(0.0f)
-	{  }
-
-	XMFLOAT3 getPos() const { return mPos; }
-	XMFLOAT3 getTarget() const { return mTarget; }
-	float getYaw() const { return mYaw; }
-	float getRoll() const { return mRoll; }
-	float getRadius() const { return mRadius; }
-	float getVelocity() const { return mPlayerVelocity; }
-
-	void setPos(const XMFLOAT3& pos) { mPos = pos; }
-	void setTarget(const XMFLOAT3& target) { mTarget = target; }
-	void setYaw(const float& yaw) { mYaw = yaw; }
-	void setRoll(const float& roll) { mRoll = roll; }
-	void setRadius(const float& radius) { mRadius = radius; }
-	void setVelocity(const float& velocity) { mPlayerVelocity = velocity; }
-};
+#include "FbxLoader.h"
+#include "RollingTheBall.h"
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
-struct RenderItem
-{
-	RenderItem() = default;
-	RenderItem(const RenderItem& rhs) = delete;
-
-	// World matrix of the shape that describes the object's local space
-	// relative to the world space, which defines the position, orientation,
-	// and scale of the object in the world.
-	XMFLOAT4X4 World = MathHelper::Identity4x4();
-	XMFLOAT4X4 TexTransform = MathHelper::Identity4x4();
-
-	// Dirty flag indicating the object data has changed and we need to update the constant buffer.
-	// Because we have an object cbuffer for each FrameResource, we have to apply the
-	// update to each FrameResource.  Thus, when we modify obect data we should set 
-	// NumFramesDirty = gNumFrameResources so that each frame resource gets the update.
-	int NumFramesDirty = gNumFrameResources;
-
-	// Index into GPU constant buffer corresponding to the ObjectCB for this render item.
-	UINT ObjCBIndex = -1;
-
-	Material* Mat = nullptr;
-	MeshGeometry* Geo = nullptr;
-
-	// Primitive topology.
-	D3D12_PRIMITIVE_TOPOLOGY PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-	// DrawIndexedInstanced parameters.
-	UINT IndexCount = 0;
-	UINT StartIndexLocation = 0;
-	int BaseVertexLocation = 0;
-};
-
-enum class RenderLayer : int
-{
-	Opaque = 0,
-	Mirrors,
-	Reflected,
-	Transparent,
-	Shadow,
-	Count
-};
-
-class rollingTheBall : public D3DApp
-{
-public:
-	rollingTheBall(HINSTANCE hInstance);
-	rollingTheBall(const rollingTheBall& rhs) = delete;
-	rollingTheBall& operator=(const rollingTheBall& rhs) = delete;
-	~rollingTheBall();
-
-	virtual bool Initialize()override;
-
-private:
-	virtual void OnResize()override;
-	virtual void Update(const GameTimer& gt)override;
-	virtual void Draw(const GameTimer& gt)override;
-
-	virtual void OnMouseDown(WPARAM btnState, int x, int y)override;
-	virtual void OnMouseUp(WPARAM btnState, int x, int y)override;
-	virtual void OnMouseMove(WPARAM btnState, int x, int y)override;
-
-	void OnKeyboardInput(const GameTimer& gt);
-
-	void UpdatePlayerPosition(const GameTimer & gt);
-	void UpdatePlayerShadow(const GameTimer & gt);
-	void UpdateCamera(const GameTimer& gt);
-	void UpdateObjectCBs(const GameTimer& gt);
-	void UpdateMainPassCB(const GameTimer& gt);
-	void UpdateMaterialCB(const GameTimer& gt);
-
-	void LoadTextures();
-	void BuildDescriptorHeaps();
-	void BuildTextureBufferViews();
-	void BuildConstantBufferViews();
-	void BuildRootSignature();
-	void BuildShadersAndInputLayout();
-	void BuildShapeGeometry();
-	void BuildMaterials();
-	void BuildPSOs();
-	void BuildFrameResources();
-	void UpdateObjectShadows();
-	void BuildRenderItems();
-	void BuildObjectShadows();
-	void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
-	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
-
-private:
-	std::vector<std::unique_ptr<FrameResource>> mFrameResources;
-	FrameResource* mCurrFrameResource = nullptr;
-	int mCurrFrameResourceIndex = 0;
-
-	ComPtr<ID3D12RootSignature> mRootSignature = nullptr;
-	ComPtr<ID3D12DescriptorHeap> mCbvHeap = nullptr;
-	ComPtr<ID3D12DescriptorHeap> mSrvDescriptorHeap = nullptr;
-
-	std::unordered_map<std::string, std::unique_ptr<MeshGeometry>> mGeometries;
-	std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
-	std::unordered_map<std::string, std::unique_ptr<Texture>> mTextures;
-	std::unordered_map<std::string, ComPtr<ID3DBlob>> mShaders;
-	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
-
-	std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
-
-	// List of all the render items.
-	std::vector<std::unique_ptr<RenderItem>> mAllRitems;
-	std::vector<std::unique_ptr<CollisionSphere>> mCollisionRitems;
-
-	// Render items divided by PSO.
-	std::vector<RenderItem*> mRitems[(int)RenderLayer::Count];
-
-	PassConstants mMainPassCB;
-
-	UINT mObjCbvOffset = 0;
-	UINT mPassCbvOffset = 0;
-	UINT mMatCbvOffset = 0;
-	UINT mCbvSrvDescriptorSize = 0;
-
-	bool mIsWireframe = false;
-	bool attackMonster = false;
-
-	/*
-	* EyePos - EyeTarget
-	* player - playerTarget
-	* a d - playerTarget Move(Yaw)
-	* w s - playerTarget, EyePos Move // EyeDirection based on playerTarget
-	* mouse left click - EyeTarget Move
-	* mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
-	*/
-	const float mCameraRadius = 15.0f;
-	float mCameraPhi = XM_PIDIV2;
-	float mCameraTheta = 0.0f;
-
-	Light mMainLight;
-
-	// Player Infomation and Cache render items of player
-	PlayerInfo mPlayer;
-	RenderItem* mPlayerRitem = nullptr;
-	RenderItem* mShadowedPlayerRitem = nullptr;
-
-	// Target Circle
-	const std::vector<float> mTargetRadius = { 3.0f, 8.0f, 11.0f };
-	XMFLOAT3 mTargetPos = { 0.0f, 1.0f, 70.0f };
-	UINT mTargetIndexOffset = 0;
-	UINT mTargetIndexEndOffset = 0;
-	float mDistanceToTarget = 30.0f;
-
-	XMFLOAT3 mEyePos = { 0.0f, 30.0f, -30.0f };
-	XMFLOAT3 mEyeTarget = mPlayer.getPos();
-	XMFLOAT3 mEyePosCalc = { mCameraRadius * 2 * sinf(XM_PI / 3.0f), mCameraRadius * 2 * cosf(XM_PI / 3.0f), mCameraRadius * 2 * sinf(XM_PI / 3.0f) };
-
-	XMFLOAT4X4 mView = MathHelper::Identity4x4();
-	XMFLOAT4X4 mProj = MathHelper::Identity4x4();
-
-	POINT mLastMousePos;
-};
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 	PSTR cmdLine, int showCmd)
@@ -221,7 +25,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 
 	try
 	{
-		rollingTheBall theApp(hInstance);
+		RollingTheBall theApp(hInstance);
 		if (!theApp.Initialize())
 			return 0;
 
@@ -234,19 +38,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 	}
 }
 
-rollingTheBall::rollingTheBall(HINSTANCE hInstance)
+RollingTheBall::RollingTheBall(HINSTANCE hInstance)
 	: D3DApp(hInstance)
 {
 }
 
-rollingTheBall::~rollingTheBall()
+RollingTheBall::~RollingTheBall()
 {
 	if (md3dDevice != nullptr)
 		FlushCommandQueue();
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
-bool rollingTheBall::Initialize()
+bool RollingTheBall::Initialize()
 {
 	if (!D3DApp::Initialize())
 		return false;
@@ -260,6 +64,7 @@ bool rollingTheBall::Initialize()
 	BuildRootSignature();
 	BuildShadersAndInputLayout();
 	BuildShapeGeometry();
+	BuildCone();
 	BuildMaterials();
 	BuildRenderItems();
 	BuildObjectShadows();
@@ -281,7 +86,7 @@ bool rollingTheBall::Initialize()
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
-void rollingTheBall::OnResize()
+void RollingTheBall::OnResize()
 {
 	D3DApp::OnResize();
 
@@ -290,7 +95,7 @@ void rollingTheBall::OnResize()
 	XMStoreFloat4x4(&mProj, P);
 }
 
-void rollingTheBall::Update(const GameTimer& gt)
+void RollingTheBall::Update(const GameTimer& gt)
 {
 	OnKeyboardInput(gt);
 	UpdateCamera(gt);
@@ -314,7 +119,7 @@ void rollingTheBall::Update(const GameTimer& gt)
 	UpdateMaterialCB(gt);
 }
 
-void rollingTheBall::Draw(const GameTimer& gt)
+void RollingTheBall::Draw(const GameTimer& gt)
 {
 	auto cmdListAlloc = mCurrFrameResource->CmdListAlloc;
 
@@ -386,7 +191,7 @@ void rollingTheBall::Draw(const GameTimer& gt)
 	mCommandQueue->Signal(mFence.Get(), mCurrentFence);
 }
 
-void rollingTheBall::OnMouseDown(WPARAM btnState, int x, int y)
+void RollingTheBall::OnMouseDown(WPARAM btnState, int x, int y)
 {
 	mLastMousePos.x = x;
 	mLastMousePos.y = y;
@@ -394,12 +199,12 @@ void rollingTheBall::OnMouseDown(WPARAM btnState, int x, int y)
 	SetCapture(mhMainWnd);
 }
 
-void rollingTheBall::OnMouseUp(WPARAM btnState, int x, int y)
+void RollingTheBall::OnMouseUp(WPARAM btnState, int x, int y)
 {
 	ReleaseCapture();
 }
 
-void rollingTheBall::OnMouseMove(WPARAM btnState, int x, int y)
+void RollingTheBall::OnMouseMove(WPARAM btnState, int x, int y)
 {
 	XMVECTOR eyePos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
 	XMVECTOR eyeTarget = XMVectorSet(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z, 0.0f);
@@ -454,7 +259,7 @@ void rollingTheBall::OnMouseMove(WPARAM btnState, int x, int y)
 	mLastMousePos.y = y;
 }
 
-void rollingTheBall::OnKeyboardInput(const GameTimer& gt)
+void RollingTheBall::OnKeyboardInput(const GameTimer& gt)
 {
 	XMFLOAT3 mPlayerTarget = mPlayer.getTarget();
 	XMFLOAT3 mPlayerPos = mPlayer.getPos();
@@ -513,7 +318,7 @@ void rollingTheBall::OnKeyboardInput(const GameTimer& gt)
 		mPlayerTarget.x = mPlayerPos.x + mCameraRadius * sinf(mCameraPhi) * sinf(mPlayerYaw);
 		mPlayerTarget.z = mPlayerPos.z + mCameraRadius * sinf(mCameraPhi) * cosf(mPlayerYaw);
 	}
-	
+
 	if (GetAsyncKeyState('R') & 0x8000)
 	{
 		pushKey = true;
@@ -548,16 +353,16 @@ void rollingTheBall::OnKeyboardInput(const GameTimer& gt)
 	{
 		UpdatePlayerPosition(gt);
 	}
-	
+
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
-void rollingTheBall::UpdatePlayerPosition(const GameTimer& gt)
+void RollingTheBall::UpdatePlayerPosition(const GameTimer& gt)
 {
 	XMFLOAT3 mPlayerTarget = mPlayer.getTarget();
 	XMFLOAT3 mPlayerPos = mPlayer.getPos();
 	float mPlayerYaw = mPlayer.getYaw();
-	float mPlayerRoll= mPlayer.getRoll();
+	float mPlayerRoll = mPlayer.getRoll();
 	float mPlayerVelocity = mPlayer.getVelocity();
 	static float prePlayerVelocity = mPlayerVelocity;
 	float mPlayerRadius = mPlayer.getRadius();
@@ -623,7 +428,7 @@ void rollingTheBall::UpdatePlayerPosition(const GameTimer& gt)
 
 		prePlayerVelocity = mPlayerVelocity;
 	}
-	
+
 	XMVECTOR EyePosOne = XMVectorSet(sinf(mPlayerYaw + XM_PI), 1.0f, cosf(mPlayerYaw + XM_PI), 1.0f);
 	EyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, PlayerPos);
 
@@ -638,7 +443,7 @@ void rollingTheBall::UpdatePlayerPosition(const GameTimer& gt)
 	mPlayer.setRoll(mPlayerRoll);
 }
 
-void rollingTheBall::UpdatePlayerShadow(const GameTimer& gt)
+void RollingTheBall::UpdatePlayerShadow(const GameTimer& gt)
 {
 	XMFLOAT3 mPlayerPos = mPlayer.getPos();
 	XMMATRIX playerWorld = XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixTranslation(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z);
@@ -651,7 +456,7 @@ void rollingTheBall::UpdatePlayerShadow(const GameTimer& gt)
 	mShadowedPlayerRitem->NumFramesDirty = gNumFrameResources;
 }
 
-void rollingTheBall::UpdateCamera(const GameTimer& gt)
+void RollingTheBall::UpdateCamera(const GameTimer& gt)
 {
 	// Build the view matrix.
 	XMVECTOR pos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
@@ -662,7 +467,7 @@ void rollingTheBall::UpdateCamera(const GameTimer& gt)
 	XMStoreFloat4x4(&mView, view);
 }
 
-void rollingTheBall::UpdateObjectCBs(const GameTimer& gt)
+void RollingTheBall::UpdateObjectCBs(const GameTimer& gt)
 {
 	XMVECTOR PlayerPos = XMLoadFloat3(&mPlayer.getPos());
 	XMVECTOR PlayerTarget = XMLoadFloat3(&mPlayer.getTarget());
@@ -748,14 +553,14 @@ void rollingTheBall::UpdateObjectCBs(const GameTimer& gt)
 	}
 }
 
-void rollingTheBall::UpdateObjectShadows()
+void RollingTheBall::UpdateObjectShadows()
 {
 	// for (auto& e : mRitems[(int)RenderLayer::Shadow])
 	// 3 means Player, player shadow, grid 
 	for (int i = mTargetIndexOffset - 3; i < mTargetIndexEndOffset - 3; ++i)
 	{
 		auto& e = mRitems[(int)RenderLayer::Shadow][i];
-		
+
 		// Load the object world
 		auto& o = mRitems[(int)RenderLayer::Opaque][i + 1];
 		XMMATRIX shadowWorld = XMLoadFloat4x4(&o->World);
@@ -771,7 +576,7 @@ void rollingTheBall::UpdateObjectShadows()
 	}
 }
 
-void rollingTheBall::UpdateMainPassCB(const GameTimer& gt)
+void RollingTheBall::UpdateMainPassCB(const GameTimer& gt)
 {
 	XMMATRIX view = XMLoadFloat4x4(&mView);
 	XMMATRIX proj = XMLoadFloat4x4(&mProj);
@@ -806,7 +611,7 @@ void rollingTheBall::UpdateMainPassCB(const GameTimer& gt)
 	currPassCB->CopyData(0, mMainPassCB);
 }
 
-void rollingTheBall::UpdateMaterialCB(const GameTimer & gt)
+void RollingTheBall::UpdateMaterialCB(const GameTimer & gt)
 {
 	auto currMaterialCB = mCurrFrameResource->MaterialCB.get();
 	for (auto& e : mMaterials)
@@ -830,7 +635,7 @@ void rollingTheBall::UpdateMaterialCB(const GameTimer & gt)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
-void rollingTheBall::LoadTextures()
+void RollingTheBall::LoadTextures()
 {
 	auto bricksTex = std::make_unique<Texture>();
 	bricksTex->Name = "bricksTex";
@@ -875,7 +680,7 @@ void rollingTheBall::LoadTextures()
 	mTextures[tileTex->Name] = std::move(tileTex);
 }
 
-void rollingTheBall::BuildDescriptorHeaps()
+void RollingTheBall::BuildDescriptorHeaps()
 {
 	mObjCbvOffset = (UINT)mTextures.size();
 	UINT objCount = (UINT)mRitems[(int)RenderLayer::Opaque].size() + (UINT)mRitems[(int)RenderLayer::Shadow].size();
@@ -901,7 +706,7 @@ void rollingTheBall::BuildDescriptorHeaps()
 		IID_PPV_ARGS(&mCbvHeap)));
 }
 
-void rollingTheBall::BuildTextureBufferViews()
+void RollingTheBall::BuildTextureBufferViews()
 {
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
 
@@ -945,7 +750,7 @@ void rollingTheBall::BuildTextureBufferViews()
 	md3dDevice->CreateShaderResourceView(grassTex.Get(), &srvDesc, hDescriptor);
 }
 
-void rollingTheBall::BuildConstantBufferViews()
+void RollingTheBall::BuildConstantBufferViews()
 {
 	UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
 	UINT objCount = (UINT)mRitems[(int)RenderLayer::Opaque].size() + (UINT)mRitems[(int)RenderLayer::Shadow].size();
@@ -1022,7 +827,7 @@ void rollingTheBall::BuildConstantBufferViews()
 	}
 }
 
-void rollingTheBall::BuildRootSignature()
+void RollingTheBall::BuildRootSignature()
 {
 	CD3DX12_DESCRIPTOR_RANGE cbvTable[3];
 
@@ -1070,7 +875,7 @@ void rollingTheBall::BuildRootSignature()
 		IID_PPV_ARGS(mRootSignature.GetAddressOf())));
 }
 
-void rollingTheBall::BuildShadersAndInputLayout()
+void RollingTheBall::BuildShadersAndInputLayout()
 {
 	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "VS", "vs_5_1");
 	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "PS", "ps_5_1");
@@ -1083,7 +888,7 @@ void rollingTheBall::BuildShadersAndInputLayout()
 	};
 }
 
-void rollingTheBall::BuildShapeGeometry()
+void RollingTheBall::BuildShapeGeometry()
 {
 	mMainLight.Direction = { 0.57735f, -0.57735f, 0.57735f };
 	mMainLight.Strength = { 0.6f, 0.6f, 0.6f };
@@ -1213,7 +1018,64 @@ void rollingTheBall::BuildShapeGeometry()
 	mGeometries[geo->Name] = std::move(geo);
 }
 
-void rollingTheBall::BuildMaterials()
+void RollingTheBall::BuildCone()
+{
+	FbxLoader fbx;
+	std::vector<FbxLoader::FbxVertex> outFbxVertex;
+
+	fbx.LoadFBX(outFbxVertex);
+
+	if (outFbxVertex.size() == 0)
+	{
+		MessageBox(0, L"cone not found", 0, 0);
+		return;
+	}
+
+	UINT vCount = 0;
+	vCount = outFbxVertex.size();
+
+	std::vector<Vertex> vertices(vCount);
+	std::vector<std::int32_t> indices(vCount);
+	for (UINT i = 0; i < vCount; ++i)
+	{
+		vertices[i].Pos.x = outFbxVertex[i].pos[0];
+		vertices[i].Pos.y = outFbxVertex[i].pos[1];
+		vertices[i].Pos.z = outFbxVertex[i].pos[2];
+
+		indices[i] = i + 1;
+	}
+
+	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::int32_t);
+
+	auto geo = std::make_unique<MeshGeometry>();
+	geo->Name = "ConeGeo";
+
+	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+
+	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
+
+	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+
+	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexBufferByteSize = vbByteSize;
+	geo->IndexFormat = DXGI_FORMAT_R32_UINT;
+	geo->IndexBufferByteSize = ibByteSize;
+
+	SubmeshGeometry coneSubmesh;
+	coneSubmesh.IndexCount = (UINT)indices.size();
+	coneSubmesh.StartIndexLocation = 0;
+	coneSubmesh.BaseVertexLocation = 0;
+
+	geo->DrawArgs["Cone"] = coneSubmesh;
+
+	mGeometries[geo->Name] = std::move(geo);
+}
+
+void RollingTheBall::BuildMaterials()
 {
 	auto bricks0 = std::make_unique<Material>();
 	bricks0->Name = "bricks0";
@@ -1271,7 +1133,7 @@ void rollingTheBall::BuildMaterials()
 	mMaterials["shadow0"] = std::move(shadow0);
 }
 
-void rollingTheBall::BuildPSOs()
+void RollingTheBall::BuildPSOs()
 {
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc;
 
@@ -1352,7 +1214,7 @@ void rollingTheBall::BuildPSOs()
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
 }
 
-void rollingTheBall::BuildFrameResources()
+void RollingTheBall::BuildFrameResources()
 {
 	for (int i = 0; i < gNumFrameResources; ++i)
 	{
@@ -1361,7 +1223,7 @@ void rollingTheBall::BuildFrameResources()
 	}
 }
 
-void rollingTheBall::BuildRenderItems()
+void RollingTheBall::BuildRenderItems()
 {
 	UINT objCBIndex = 2;
 
@@ -1378,15 +1240,21 @@ void rollingTheBall::BuildRenderItems()
 	mAllRitems.push_back(std::move(gridRitem));
 
 	auto lineRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
+	// Line
+	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
+	// Cone
+	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+	//Tank because of size
+	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(0.05f,0.05f, 0.05f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+
 	XMStoreFloat4x4(&lineRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	lineRitem->ObjCBIndex = objCBIndex++;
 	lineRitem->Mat = mMaterials["stone0"].get();
-	lineRitem->Geo = mGeometries["shapeGeo"].get();
-	lineRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	lineRitem->IndexCount = lineRitem->Geo->DrawArgs["box"].IndexCount;
-	lineRitem->StartIndexLocation = lineRitem->Geo->DrawArgs["box"].StartIndexLocation;
-	lineRitem->BaseVertexLocation = lineRitem->Geo->DrawArgs["box"].BaseVertexLocation;
+	lineRitem->Geo = mGeometries["ConeGeo"].get();
+	lineRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+	lineRitem->StartIndexLocation = lineRitem->Geo->DrawArgs["Cone"].StartIndexLocation;
+	lineRitem->BaseVertexLocation = lineRitem->Geo->DrawArgs["Cone"].BaseVertexLocation;
+	lineRitem->IndexCount = lineRitem->Geo->DrawArgs["Cone"].IndexCount;
 	mAllRitems.push_back(std::move(lineRitem));
 
 	XMMATRIX brickTexTransform = XMMatrixScaling(1.0f, 1.0f, 1.0f);
@@ -1551,7 +1419,7 @@ void rollingTheBall::BuildRenderItems()
 	// playerRitem / shadowedPlayerRitem (2) SUBTRACT 
 	UINT endIndex = objCBIndex - 2;
 	//for (auto& e : mAllRitems)
-	for(int i = 0; i < endIndex; ++i)
+	for (int i = 0; i < endIndex; ++i)
 	{
 		auto& e = mAllRitems.at(i);
 		mRitems[(int)RenderLayer::Opaque].push_back(e.get());
@@ -1567,7 +1435,7 @@ void rollingTheBall::BuildRenderItems()
 		mRitems[(int)RenderLayer::Shadow].push_back(shadowedObjectRitem.get());
 		mAllRitems.push_back(std::move(shadowedObjectRitem));
 	}
-	
+
 	//
 	// Player
 	auto playerRitem = std::make_unique<RenderItem>();
@@ -1597,7 +1465,7 @@ void rollingTheBall::BuildRenderItems()
 	mAllRitems.push_back(std::move(shadowedPlayerRitem));
 }
 
-void rollingTheBall::BuildObjectShadows()
+void RollingTheBall::BuildObjectShadows()
 {
 	for (auto& e : mRitems[(int)RenderLayer::Shadow])
 	{
@@ -1612,7 +1480,7 @@ void rollingTheBall::BuildObjectShadows()
 	}
 }
 //-------------------------------------------------------------------------------------------------------------------------------
-void rollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
+void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
 	UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
 	UINT matCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(MaterialConstants));
@@ -1645,7 +1513,7 @@ void rollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 		matCbvHandle.Offset(matCbvIndex, mCbvSrvDescriptorSize);
 
 		//if(ritems.size() != 1)
-			cmdList->SetGraphicsRootDescriptorTable(0, tex);
+		cmdList->SetGraphicsRootDescriptorTable(0, tex);
 		cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
 		cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
 
@@ -1654,7 +1522,7 @@ void rollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
-std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> rollingTheBall::GetStaticSamplers()
+std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> RollingTheBall::GetStaticSamplers()
 {
 	const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
 		0, // shaderRegister
