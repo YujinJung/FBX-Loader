@@ -1233,15 +1233,15 @@ void RollingTheBall::BuildRenderItems()
 	// Line
 	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
 	// Cone
-	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
 	//Tank because of size
-	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
 
 	XMStoreFloat4x4(&lineRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	lineRitem->ObjCBIndex = objCBIndex++;
 	lineRitem->Mat = mMaterials["stone0"].get();
 	lineRitem->Geo = mGeometries["ConeGeo"].get();
-	lineRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+	lineRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	lineRitem->StartIndexLocation = lineRitem->Geo->DrawArgs["Cone"].StartIndexLocation;
 	lineRitem->BaseVertexLocation = lineRitem->Geo->DrawArgs["Cone"].BaseVertexLocation;
 	lineRitem->IndexCount = lineRitem->Geo->DrawArgs["Cone"].IndexCount;

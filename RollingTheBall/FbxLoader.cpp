@@ -31,7 +31,8 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 
 	FbxImporter* pImporter = FbxImporter::Create(gFbxManager, "");
 
-	bool bSuccess = pImporter->Initialize("../Resource/tank_fbx_Body.FBX", -1, gFbxManager->GetIOSettings());
+	bool bSuccess = pImporter->Initialize("../Resource/cone.FBX", -1, gFbxManager->GetIOSettings());
+	//bool bSuccess = pImporter->Initialize("../Resource/tank_fbx_Body.FBX", -1, gFbxManager->GetIOSettings());
 	if (!bSuccess) return E_FAIL;
 
 	FbxScene* pFbxScene = FbxScene::Create(gFbxManager, "");
@@ -42,7 +43,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 	pImporter->Destroy();
 
 	FbxAxisSystem sceneAxisSystem = pFbxScene->GetGlobalSettings().GetAxisSystem();
-	//FbxAxisSystem::MayaYUp.ConvertScene(pFbxScene); // Delete?
+	FbxAxisSystem::MayaZUp.ConvertScene(pFbxScene); // Delete?
 
 	// Convert quad to triangle
 	FbxGeometryConverter geometryConverter(gFbxManager);
