@@ -167,6 +167,7 @@
     <ClInclude Include="FbxLoader.h" />
     <ClInclude Include="FrameResource.h" />
     <ClInclude Include="RollingTheBall.h" />
+    <ClInclude Include="vertexHash.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

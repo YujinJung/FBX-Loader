@@ -12,7 +12,7 @@ struct ObjectConstants
 
 struct PassConstants
 {
-    DirectX::XMFLOAT4X4 View = MathHelper::Identity4x4();
+	DirectX::XMFLOAT4X4 View = MathHelper::Identity4x4();
     DirectX::XMFLOAT4X4 InvView = MathHelper::Identity4x4();
     DirectX::XMFLOAT4X4 Proj = MathHelper::Identity4x4();
     DirectX::XMFLOAT4X4 InvProj = MathHelper::Identity4x4();
@@ -36,6 +36,20 @@ struct Vertex
     DirectX::XMFLOAT3 Pos;
 	DirectX::XMFLOAT3 Normal;
 	DirectX::XMFLOAT2 TexC;
+
+	bool operator==(const Vertex& other) const
+	{
+		if (Pos.x != other.Pos.x || Pos.y != other.Pos.y || Pos.z != other.Pos.z)
+			return false;
+
+		if (Normal.x != other.Normal.x || Normal.y != other.Normal.y || Normal.z != other.Normal.z)
+			return false;
+
+		if (TexC.x != other.TexC.x || TexC.y != other.TexC.y)
+			return false;
+		
+		return true;
+	}
 };
 
 // Stores the resources needed for the CPU to build the command lists

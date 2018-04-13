@@ -1039,7 +1039,7 @@ void RollingTheBall::BuildCone()
 	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::int32_t);
 
 	auto geo = std::make_unique<MeshGeometry>();
-	geo->Name = "ConeGeo";
+	geo->Name = "FbxGeo";
 
 	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
 	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
@@ -1060,7 +1060,7 @@ void RollingTheBall::BuildCone()
 	coneSubmesh.StartIndexLocation = 0;
 	coneSubmesh.BaseVertexLocation = 0;
 
-	geo->DrawArgs["Cone"] = coneSubmesh;
+	geo->DrawArgs["Fbx"] = coneSubmesh;
 
 	mGeometries[geo->Name] = std::move(geo);
 }
@@ -1233,18 +1233,18 @@ void RollingTheBall::BuildRenderItems()
 	// Line
 	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
 	// Cone
-	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
+	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
 	//Tank because of size
-	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
 
 	XMStoreFloat4x4(&lineRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	lineRitem->ObjCBIndex = objCBIndex++;
 	lineRitem->Mat = mMaterials["stone0"].get();
-	lineRitem->Geo = mGeometries["ConeGeo"].get();
+	lineRitem->Geo = mGeometries["FbxGeo"].get();
 	lineRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	lineRitem->StartIndexLocation = lineRitem->Geo->DrawArgs["Cone"].StartIndexLocation;
-	lineRitem->BaseVertexLocation = lineRitem->Geo->DrawArgs["Cone"].BaseVertexLocation;
-	lineRitem->IndexCount = lineRitem->Geo->DrawArgs["Cone"].IndexCount;
+	lineRitem->StartIndexLocation = lineRitem->Geo->DrawArgs["Fbx"].StartIndexLocation;
+	lineRitem->BaseVertexLocation = lineRitem->Geo->DrawArgs["Fbx"].BaseVertexLocation;
+	lineRitem->IndexCount = lineRitem->Geo->DrawArgs["Fbx"].IndexCount;
 	mAllRitems.push_back(std::move(lineRitem));
 
 	XMMATRIX brickTexTransform = XMMatrixScaling(1.0f, 1.0f, 1.0f);
