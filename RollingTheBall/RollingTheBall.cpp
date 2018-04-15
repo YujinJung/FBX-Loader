@@ -634,6 +634,22 @@ void RollingTheBall::UpdateMaterialCB(const GameTimer & gt)
 	}
 }
 
+void RollingTheBall::UpdateAnimationCBs(const GameTimer & gt)
+{
+	auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
+
+	// We only have one skinned model being animated.
+	mSkinnedModelInst->UpdateSkinnedAnimation(gt.DeltaTime());
+
+	SkinnedConstants skinnedConstants;
+	std::copy(
+		std::begin(mSkinnedModelInst->FinalTransforms),
+		std::end(mSkinnedModelInst->FinalTransforms),
+		&skinnedConstants.BoneTransforms[0]);
+
+	currSkinnedCB->CopyData(0, skinnedConstants);
+}
+
 //-------------------------------------------------------------------------------------------------------------------------------
 void RollingTheBall::LoadTextures()
 {
@@ -1239,7 +1255,7 @@ void RollingTheBall::BuildRenderItems()
 
 	XMStoreFloat4x4(&lineRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	lineRitem->ObjCBIndex = objCBIndex++;
-	lineRitem->Mat = mMaterials["stone0"].get();
+	lineRitem->Mat = mMaterials["bricks0"].get();
 	lineRitem->Geo = mGeometries["FbxGeo"].get();
 	lineRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	lineRitem->StartIndexLocation = lineRitem->Geo->DrawArgs["Fbx"].StartIndexLocation;

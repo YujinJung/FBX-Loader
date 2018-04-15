@@ -12,6 +12,10 @@ public:
 
 	void ReadVertex(fbxsdk::FbxMesh * pMesh, const uint32_t &j, const uint32_t &k, Vertex &outVertex, fbxsdk::FbxVector4 * pVertices);
 
+	void ProcessSkeletonHierarchy(FbxNode * inRootNode);
+
+	void ProcessSkeletonHierarchyRecursively(FbxNode * inNode, int inDepth, int myIndex, int inParentIndex);
+
 private:
 
 };

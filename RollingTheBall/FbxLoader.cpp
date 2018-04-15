@@ -32,7 +32,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 	FbxImporter* pImporter = FbxImporter::Create(gFbxManager, "");
 
 	//bool bSuccess = pImporter->Initialize("../Resource/cone.FBX", -1, gFbxManager->GetIOSettings());
-	bool bSuccess = pImporter->Initialize("../Resource/tank_fbx_Body.FBX", -1, gFbxManager->GetIOSettings());
+	bool bSuccess = pImporter->Initialize("../Resource/Boxing.FBX", -1, gFbxManager->GetIOSettings());
 	if (!bSuccess) return E_FAIL;
 
 	FbxScene* pFbxScene = FbxScene::Create(gFbxManager, "");
@@ -51,7 +51,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 
 	// Start to RootNode
 	FbxNode* pFbxRootNode = pFbxScene->GetRootNode();
-
+	//int numStacks = pFbxScene->GetSrcObjectCount(FBX_TYPE(FbxAnimStack)); i++)
 	if (pFbxRootNode)
 	{
 		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
@@ -84,7 +84,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 					outVertexVector.push_back(vertex);
 				}*/
 
-				// Triangle
+			// Triangle
 			uint32_t tCount = pMesh->GetPolygonCount();
 
 			for (uint32_t j = 0; j < tCount; ++j)
@@ -109,7 +109,6 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 						outIndexVector.push_back(index);
 						outVertexVector.push_back(outVertex);
 					}
-
 				}
 			}
 		}
@@ -136,4 +135,28 @@ void FbxLoader::ReadVertex(fbxsdk::FbxMesh * pMesh, const uint32_t &j, const uin
 	pMesh->GetPolygonVertexUV(j, k, "", pUVs, bUnMappedUV);
 	outVertex.TexC.x = pUVs.mData[0];
 	outVertex.TexC.y = pUVs.mData[1];
+}
+
+void FbxLoader::ProcessSkeletonHierarchy(FbxNode* inRootNode)
+{
+	for (int childIndex = 0; childIndex < inRootNode->GetChildCount(); ++childIndex)
+	{
+		FbxNode* currNode = inRootNode->GetChild(childIndex);
+		ProcessSkeletonHierarchyRecursively(currNode, 0, 0, -1);
+	}
+}
+
+void FbxLoader::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int inDepth, int myIndex, int inParentIndex)
+{
+	if (inNode->GetNodeAttribute() && inNode->GetNodeAttribute()->GetAttributeType() && inNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eSkeleton)
+	{
+		Joint currJoint;
+		currJoint.mParentIndex = inParentIndex;
+		currJoint.mName = inNode->GetName();
+		mSkeleton.mJoints.push_back(currJoint);
+	}
+	for (int i = 0; i < inNode->GetChildCount(); i++)
+	{
+		ProcessSkeletonHierarchyRecursively(inNode->GetChild(i), inDepth + 1, mSkeleton.mJoints.size(), myIndex);
+	}
 }
