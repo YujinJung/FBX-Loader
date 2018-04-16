@@ -52,7 +52,7 @@ struct Vertex
 
 		if (TexC.x != other.TexC.x || TexC.y != other.TexC.y)
 			return false;
-		
+
 		return true;
 	}
 };
@@ -64,6 +64,26 @@ struct SkinnedVertex
 	DirectX::XMFLOAT2 TexC;
 	DirectX::XMFLOAT3 BoneWeights;
 	BYTE BoneIndices[4];
+
+	bool operator==(const SkinnedVertex& other) const
+	{
+		if (Pos.x != other.Pos.x || Pos.y != other.Pos.y || Pos.z != other.Pos.z)
+			return false;
+
+		if (Normal.x != other.Normal.x || Normal.y != other.Normal.y || Normal.z != other.Normal.z)
+			return false;
+
+		if (TexC.x != other.TexC.x || TexC.y != other.TexC.y)
+			return false;
+
+		if (BoneWeights.x != other.BoneWeights.x || BoneWeights.y != other.BoneWeights.y || BoneWeights.z != other.BoneWeights.z)
+			return false;
+
+		if (BoneIndices[0] != other.BoneIndices[0] && BoneIndices[1] != other.BoneIndices[1] && BoneIndices[2] != other.BoneIndices[2] && BoneIndices[3] != other.BoneIndices[3])
+			return false;
+
+		return true;
+	}
 };
 
 // Stores the resources needed for the CPU to build the command lists
@@ -72,7 +92,7 @@ struct FrameResource
 {
 public:
     
-    FrameResource(ID3D12Device* device, UINT passCount, UINT objectCount, UINT materialCount);
+    FrameResource(ID3D12Device* device, UINT passCount, UINT objectCount, UINT materialCount, UINT skinnedObjectCount);
     FrameResource(const FrameResource& rhs) = delete;
     FrameResource& operator=(const FrameResource& rhs) = delete;
     ~FrameResource();

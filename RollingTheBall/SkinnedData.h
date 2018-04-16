@@ -29,6 +29,9 @@ struct BoneAnimation
 	float GetStartTime()const;
 	float GetEndTime()const;
 
+	//std::string mName;
+	//int mParentIndex;
+
 	void Interpolate(float t, DirectX::XMFLOAT4X4& M)const;
 
 	std::vector<Keyframe> Keyframes;
@@ -62,6 +65,8 @@ public:
 		std::vector<int>& boneHierarchy,
 		std::vector<DirectX::XMFLOAT4X4>& boneOffsets,
 		std::unordered_map<std::string, AnimationClip>& animations);
+	void SetAnimationName(const std::string& clipName);
+	std::string GetAnimationName() const;
 
 	// In a real project, you'd want to cache the result if there was a chance
 	// that you were calling this several times with the same clipName at 
@@ -75,5 +80,6 @@ private:
 
 	std::vector<DirectX::XMFLOAT4X4> mBoneOffsets;
 
+	std::string mAnimationName;
 	std::unordered_map<std::string, AnimationClip> mAnimations;
 };

@@ -64,7 +64,7 @@ bool RollingTheBall::Initialize()
 	BuildRootSignature();
 	BuildShadersAndInputLayout();
 	BuildShapeGeometry();
-	BuildCone();
+	BuildFbxGeometry();
 	BuildMaterials();
 	BuildRenderItems();
 	BuildObjectShadows();
@@ -115,6 +115,7 @@ void RollingTheBall::Update(const GameTimer& gt)
 	}
 
 	UpdateObjectCBs(gt);
+	UpdateAnimationCBs(gt);
 	UpdateMainPassCB(gt);
 	UpdateMaterialCB(gt);
 }
@@ -701,15 +702,18 @@ void RollingTheBall::BuildDescriptorHeaps()
 	mObjCbvOffset = (UINT)mTextures.size();
 	UINT objCount = (UINT)mRitems[(int)RenderLayer::Opaque].size() + (UINT)mRitems[(int)RenderLayer::Shadow].size();
 	UINT matCount = (UINT)mMaterials.size();
+	UINT skinCount = (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size();
 
 	// Need a CBV descriptor for each object for each frame resource,
 	// +1 for the perPass CBV for each frame resource.
 	// +matCount for the Materials for each frame resources.
-	UINT numDescriptors = mObjCbvOffset + (objCount + matCount + 1) * gNumFrameResources;
+	UINT numDescriptors = mObjCbvOffset + (objCount + matCount + skinCount + 1) * gNumFrameResources;
 
 	// Save an offset to the start of the pass CBVs.  These are the last 3 descriptors.
 	mMatCbvOffset = objCount * gNumFrameResources + mObjCbvOffset;
-	mPassCbvOffset = mMatCbvOffset + matCount * gNumFrameResources;
+	mPassCbvOffset = matCount * gNumFrameResources + mMatCbvOffset;
+	mSkinCbvOffset = skinCount* gNumFrameResources + mPassCbvOffset;
+
 	// mPassCbvOffset + (passSize)
 	// passSize = 1 * gNumFrameResources
 
@@ -1033,50 +1037,56 @@ void RollingTheBall::BuildShapeGeometry()
 	mGeometries[geo->Name] = std::move(geo);
 }
 
-void RollingTheBall::BuildCone()
+void RollingTheBall::BuildFbxGeometry()
 {
 	FbxLoader fbx;
 
-	std::vector<Vertex> vertices;
-	std::vector<std::int32_t> indices;
-	fbx.LoadFBX(vertices, indices);
+	std::vector<Vertex> outVertices;
+	std::vector<std::int32_t> outIndices;
+	fbx.LoadFBX(outVertices, outIndices, mSkinnedInfo);
 
-	if (vertices.size() == 0)
+	mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
+	mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
+	mSkinnedModelInst->FinalTransforms.resize(mSkinnedInfo.BoneCount());
+	mSkinnedModelInst->ClipName = mSkinnedInfo.GetAnimationName();
+	mSkinnedModelInst->TimePos = 0.0f;
+
+	if (outVertices.size() == 0)
 	{
-		MessageBox(0, L"cone not found", 0, 0);
+		MessageBox(0, L"Fbx not found", 0, 0);
 		return;
 	}
 
 	UINT vCount = 0, iCount = 0;
-	vCount = vertices.size();
-	iCount = indices.size();
+	vCount = outVertices.size();
+	iCount = outIndices.size();
 
-	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
-	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::int32_t);
+	const UINT vbByteSize = (UINT)outVertices.size() * sizeof(Vertex);
+	const UINT ibByteSize = (UINT)outIndices.size() * sizeof(std::int32_t);
 
 	auto geo = std::make_unique<MeshGeometry>();
 	geo->Name = "FbxGeo";
 
 	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
-	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), outVertices.data(), vbByteSize);
 
 	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
-	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), outIndices.data(), ibByteSize);
 
-	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
-	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), outVertices.data(), vbByteSize, geo->VertexBufferUploader);
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), outIndices.data(), ibByteSize, geo->IndexBufferUploader);
 
 	geo->VertexByteStride = sizeof(Vertex);
 	geo->VertexBufferByteSize = vbByteSize;
 	geo->IndexFormat = DXGI_FORMAT_R32_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
 
-	SubmeshGeometry coneSubmesh;
-	coneSubmesh.IndexCount = (UINT)indices.size();
-	coneSubmesh.StartIndexLocation = 0;
-	coneSubmesh.BaseVertexLocation = 0;
+	SubmeshGeometry FbxSubmesh;
+	FbxSubmesh.IndexCount = (UINT)outIndices.size();
+	FbxSubmesh.StartIndexLocation = 0;
+	FbxSubmesh.BaseVertexLocation = 0;
 
-	geo->DrawArgs["Fbx"] = coneSubmesh;
+	geo->DrawArgs["Fbx"] = FbxSubmesh;
 
 	mGeometries[geo->Name] = std::move(geo);
 }
@@ -1224,8 +1234,10 @@ void RollingTheBall::BuildFrameResources()
 {
 	for (int i = 0; i < gNumFrameResources; ++i)
 	{
-		mFrameResources.push_back(std::make_unique<FrameResource>(md3dDevice.Get(),
-			1, (UINT)mAllRitems.size(), (UINT)mMaterials.size()));
+		mFrameResources.push_back(std::make_unique<FrameResource>(
+			md3dDevice.Get(),
+			1, (UINT)mAllRitems.size(), 
+			(UINT)mMaterials.size(), 1));
 	}
 }
 
@@ -1469,6 +1481,36 @@ void RollingTheBall::BuildRenderItems()
 
 	mAllRitems.push_back(std::move(playerRitem));
 	mAllRitems.push_back(std::move(shadowedPlayerRitem));
+
+	//for (UINT i = 0; i < mSkinnedMats.size(); ++i)
+	//{
+	//	std::string submeshName = "sm_" + std::to_string(i);
+
+	//	auto ritem = std::make_unique<RenderItem>();
+
+	//	// Reflect to change coordinate system from the RHS the data was exported out as.
+	//	XMMATRIX modelScale = XMMatrixScaling(0.05f, 0.05f, -0.05f);
+	//	XMMATRIX modelRot = XMMatrixRotationY(MathHelper::Pi);
+	//	XMMATRIX modelOffset = XMMatrixTranslation(0.0f, 0.0f, -5.0f);
+	//	XMStoreFloat4x4(&ritem->World, modelScale*modelRot*modelOffset);
+
+	//	ritem->TexTransform = MathHelper::Identity4x4();
+	//	ritem->ObjCBIndex = objCBIndex++;
+	//	ritem->Mat = mMaterials[mSkinnedMats[i].Name].get();
+	//	ritem->Geo = mGeometries[mSkinnedModelFilename].get();
+	//	ritem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	//	ritem->IndexCount = ritem->Geo->DrawArgs[submeshName].IndexCount;
+	//	ritem->StartIndexLocation = ritem->Geo->DrawArgs[submeshName].StartIndexLocation;
+	//	ritem->BaseVertexLocation = ritem->Geo->DrawArgs[submeshName].BaseVertexLocation;
+
+	//	// All render items for this solider.m3d instance share
+	//	// the same skinned model instance.
+	//	ritem->SkinnedCBIndex = 0;
+	//	ritem->SkinnedModelInst = mSkinnedModelInst.get();
+
+	//	mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(ritem.get());
+	//	mAllRitems.push_back(std::move(ritem));
+	//}
 }
 
 void RollingTheBall::BuildObjectShadows()
@@ -1490,9 +1532,11 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 {
 	UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
 	UINT matCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(MaterialConstants));
+	UINT skinnedCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(SkinnedConstants));
 
 	/*auto objectCB = mCurrFrameResource->ObjectCB->Resource();
-	auto matCB = mCurrFrameResource->MaterialCB->Resource();*/
+	auto matCB = mCurrFrameResource->MaterialCB->Resource();
+	auto skinnedCB = mCurrFrameResource->SkinnedCB->Resource();*/
 
 	// For each render item...
 	for (size_t i = 0; i < ritems.size(); ++i)
@@ -1518,10 +1562,22 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 		auto matCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 		matCbvHandle.Offset(matCbvIndex, mCbvSrvDescriptorSize);
 
-		//if(ritems.size() != 1)
+	/*	UINT skinnedIndex = mSkinCbvOffset + mCurrFrameResourceIndex * (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size() + ri->SkinnedCBIndex;
+		auto skinCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+		skinCbvHandle.Offset(skinnedIndex, mCbvSrvDescriptorSize);*/
+
 		cmdList->SetGraphicsRootDescriptorTable(0, tex);
 		cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
 		cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
+
+		//if (ri->SkinnedModelInst != nullptr)
+		//{
+		//	cmdList->SetGraphicsRootDescriptorTable(3, skinCbvHandle);
+		//}
+		//else
+		//{
+		//	cmdList->SetGraphicsRootConstantBufferView(3, 0);
+		//}
 
 		cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 	}

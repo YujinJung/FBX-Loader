@@ -135,6 +135,15 @@ void SkinnedData::Set(std::vector<int>& boneHierarchy,
 	mBoneOffsets = boneOffsets;
 	mAnimations = animations;
 }
+void SkinnedData::SetAnimationName(const std::string & clipName)
+{
+	mAnimationName = clipName;
+}
+
+std::string SkinnedData::GetAnimationName() const
+{
+	return mAnimationName;
+}
 
 void SkinnedData::GetFinalTransforms(const std::string& clipName, float timePos, std::vector<XMFLOAT4X4>& finalTransforms)const
 {

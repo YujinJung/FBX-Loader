@@ -45,6 +45,30 @@ public:
 	void setVelocity(const float& velocity) { mPlayerVelocity = velocity; }
 };
 
+struct SkinnedModelInstance
+{
+	SkinnedData* SkinnedInfo = nullptr;
+	std::vector<DirectX::XMFLOAT4X4> FinalTransforms;
+	std::string ClipName;
+	float TimePos = 0.0f;
+
+	// Called every frame and increments the time position, interpolates the 
+	// animations for each bone based on the current animation clip, and 
+	// generates the final transforms which are ultimately set to the effect
+	// for processing in the vertex shader.
+	void UpdateSkinnedAnimation(float dt)
+	{
+		TimePos += dt;
+
+		// Loop animation
+		if (TimePos > SkinnedInfo->GetClipEndTime(ClipName))
+			TimePos = 0.0f;
+
+		// Compute the final transforms for this time position.
+		SkinnedInfo->GetFinalTransforms(ClipName, TimePos, FinalTransforms);
+	}
+};
+
 struct RenderItem
 {
 	RenderItem() = default;
@@ -71,6 +95,12 @@ struct RenderItem
 	// Primitive topology.
 	D3D12_PRIMITIVE_TOPOLOGY PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
+	// Only applicable to skinned render-items.
+	UINT SkinnedCBIndex = -1;
+
+	// nullptr if this render-item is not animated by skinned mesh.
+	SkinnedModelInstance* SkinnedModelInst = nullptr;
+
 	// DrawIndexedInstanced parameters.
 	UINT IndexCount = 0;
 	UINT StartIndexLocation = 0;
@@ -80,35 +110,12 @@ struct RenderItem
 enum class RenderLayer : int
 {
 	Opaque = 0,
+	SkinnedOpaque,
 	Mirrors,
 	Reflected,
 	Transparent,
 	Shadow,
 	Count
-};
-
-struct SkinnedModelInstance
-{
-	SkinnedData* SkinnedInfo = nullptr;
-	std::vector<DirectX::XMFLOAT4X4> FinalTransforms;
-	std::string ClipName;
-	float TimePos = 0.0f;
-
-	// Called every frame and increments the time position, interpolates the 
-	// animations for each bone based on the current animation clip, and 
-	// generates the final transforms which are ultimately set to the effect
-	// for processing in the vertex shader.
-	void UpdateSkinnedAnimation(float dt)
-	{
-		TimePos += dt;
-
-		// Loop animation
-		if (TimePos > SkinnedInfo->GetClipEndTime(ClipName))
-			TimePos = 0.0f;
-
-		// Compute the final transforms for this time position.
-		SkinnedInfo->GetFinalTransforms(ClipName, TimePos, FinalTransforms);
-	}
 };
 
 class RollingTheBall : public D3DApp
@@ -147,7 +154,7 @@ private:
 	void BuildRootSignature();
 	void BuildShadersAndInputLayout();
 	void BuildShapeGeometry();
-	void BuildCone();
+	void BuildFbxGeometry();
 	void BuildMaterials();
 	void BuildPSOs();
 	void BuildFrameResources();
@@ -178,8 +185,8 @@ private:
 	std::unique_ptr<SkinnedModelInstance> mSkinnedModelInst;
 	SkinnedData mSkinnedInfo;
 	std::vector<std::string> mSkinnedTextureNames;
-	//std::string mSkinnedModelFilename = "Models\\soldier.m3d";
-	/*std::vector<M3DLoader::Subset> mSkinnedSubsets;
+	/*std::string mSkinnedModelFilename = "Models\\soldier.m3d";
+	std::vector<M3DLoader::Subset> mSkinnedSubsets;
 	std::vector<M3DLoader::M3dMaterial> mSkinnedMats;*/
 
 	// List of all the render items.
@@ -194,6 +201,7 @@ private:
 	UINT mObjCbvOffset = 0;
 	UINT mPassCbvOffset = 0;
 	UINT mMatCbvOffset = 0;
+	UINT mSkinCbvOffset = 0;
 	UINT mCbvSrvDescriptorSize = 0;
 
 	bool mIsWireframe = false;
