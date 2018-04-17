@@ -158,12 +158,18 @@ void RollingTheBall::Draw(const GameTimer& gt)
 
 	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 
+	int skinnedCbvIndex = mSkinCbvOffset + mCurrFrameResourceIndex;
+	auto skinnedCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+	skinnedCbvHandle.Offset(skinnedCbvIndex, mCbvSrvDescriptorSize);
+	mCommandList->SetGraphicsRootDescriptorTable(4, skinnedCbvHandle);
+	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
+
 	int passCbvIndex = mPassCbvOffset + mCurrFrameResourceIndex;
 	auto passCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 	passCbvHandle.Offset(passCbvIndex, mCbvSrvDescriptorSize);
 	mCommandList->SetGraphicsRootDescriptorTable(3, passCbvHandle);
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Opaque]);
-	//DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
+
 
 	mCommandList->OMSetStencilRef(0);
 	mCommandList->SetPipelineState(mPSOs["shadow"].Get());
@@ -1158,7 +1164,7 @@ void RollingTheBall::BuildMaterials()
 	auto shadow0 = std::make_unique<Material>();
 	shadow0->Name = "shadow0";
 	shadow0->MatCBIndex = 5;
-	shadow0->DiffuseSrvHeapIndex = 5;
+	shadow0->DiffuseSrvHeapIndex = 4;
 	shadow0->DiffuseAlbedo = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.5f);
 	shadow0->FresnelR0 = XMFLOAT3(0.001f, 0.001f, 0.001f);
 	shadow0->Roughness = 0.0f;
@@ -1527,8 +1533,10 @@ void RollingTheBall::BuildRenderItems()
 	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
 	//Tank because of size
 	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
-
 	XMStoreFloat4x4(&FbxRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
+	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+
+
 	FbxRitem->ObjCBIndex = 2;
 	FbxRitem->Mat = mMaterials["bricks0"].get();
 	FbxRitem->Geo = mGeometries["FbxGeo"].get();
@@ -1561,57 +1569,66 @@ void RollingTheBall::BuildObjectShadows()
 //-------------------------------------------------------------------------------------------------------------------------------
 void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
-	UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
+	/*UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
 	UINT matCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(MaterialConstants));
-	UINT skinnedCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(SkinnedConstants));
-
+	UINT skinnedCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(SkinnedConstants)); */
 	/*auto objectCB = mCurrFrameResource->ObjectCB->Resource();
 	auto matCB = mCurrFrameResource->MaterialCB->Resource();
 	auto skinnedCB = mCurrFrameResource->SkinnedCB->Resource();*/
 
-	// For each render item...
-	for (size_t i = 0; i < ritems.size(); ++i)
+	if (ritems[0]->SkinnedCBIndex == -1)
 	{
-		auto ri = ritems[i];
+
+		// For each render item...
+		for (size_t i = 0; i < ritems.size(); ++i)
+		{
+			auto ri = ritems[i];
+
+			cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
+			cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
+			cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
+
+			// Offset to the CBV in the descriptor heap for this object and for this frame resource.
+			// ri->ObjCBIndex = object number 0, 1, 2, --- , n
+			// frame size  +  ��ü index
+			CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+			tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
+
+			UINT cbvIndex = mObjCbvOffset + mCurrFrameResourceIndex * ((UINT)mRitems[(int)RenderLayer::Opaque].size() + (UINT)mRitems[(int)RenderLayer::Shadow].size()) + ri->ObjCBIndex;
+			auto cbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+			cbvHandle.Offset(cbvIndex, mCbvSrvDescriptorSize);
+
+			UINT matCbvIndex = mMatCbvOffset + mCurrFrameResourceIndex * (UINT)mMaterials.size() + ri->Mat->MatCBIndex;
+			auto matCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+			matCbvHandle.Offset(matCbvIndex, mCbvSrvDescriptorSize);
+			
+			cmdList->SetGraphicsRootDescriptorTable(0, tex);
+			cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
+			cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
+
+			cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
+		}
+	}
+	else if (ritems[0]->SkinnedCBIndex != -1)
+	{
+		auto ri = ritems[0];
 
 		cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
 		cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
 		cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
 
-		// Offset to the CBV in the descriptor heap for this object and for this frame resource.
-		// ri->ObjCBIndex = object number 0, 1, 2, --- , n
-		// frame size  +  ��ü index
-
-		CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-		tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
-
-		UINT cbvIndex = mObjCbvOffset + mCurrFrameResourceIndex * ((UINT)mRitems[(int)RenderLayer::Opaque].size() + (UINT)mRitems[(int)RenderLayer::Shadow].size()) + ri->ObjCBIndex;
-		auto cbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-		cbvHandle.Offset(cbvIndex, mCbvSrvDescriptorSize);
-
-		UINT matCbvIndex = mMatCbvOffset + mCurrFrameResourceIndex * (UINT)mMaterials.size() + ri->Mat->MatCBIndex;
-		auto matCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-		matCbvHandle.Offset(matCbvIndex, mCbvSrvDescriptorSize);
-
 		UINT skinnedIndex = mSkinCbvOffset + mCurrFrameResourceIndex * (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size() + ri->SkinnedCBIndex;
 		auto skinCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 		skinCbvHandle.Offset(skinnedIndex, mCbvSrvDescriptorSize);
 
-		cmdList->SetGraphicsRootDescriptorTable(0, tex);
-		cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
-		cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
-
-		/*if (ri->SkinnedModelInst != nullptr)
+		if (ri->SkinnedModelInst != nullptr)
 		{
-			cmdList->SetGraphicsRootDescriptorTable(3, skinCbvHandle);
+			cmdList->SetGraphicsRootDescriptorTable(4, skinCbvHandle);
 		}
-		else
-		{
-			cmdList->SetGraphicsRootConstantBufferView(3, 0);
-		}*/
 
 		cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 	}
+
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------

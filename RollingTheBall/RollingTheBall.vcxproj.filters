@@ -80,5 +80,8 @@
     <Filter Include="Source Files">
       <UniqueIdentifier>{9c43d231-5689-4a53-9773-974ff82b2d11}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{548409d4-3959-4a2e-9e9c-ba82618f2577}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>

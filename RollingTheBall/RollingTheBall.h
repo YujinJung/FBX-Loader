@@ -180,6 +180,7 @@ private:
 	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
+	std::vector<D3D12_INPUT_ELEMENT_DESC> mSkinnedInputLayout;
 
 	UINT mSkinnedSrvHeapStart = 0;
 	std::unique_ptr<SkinnedModelInstance> mSkinnedModelInst;
