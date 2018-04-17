@@ -65,10 +65,7 @@ struct SkinnedVertex
 	DirectX::XMFLOAT3 BoneWeights;
 	BYTE BoneIndices[4];
 
-	std::vector<float> Weight;
-	std::vector<BYTE> Indice;
-
-	bool operator==(const SkinnedVertex& other) const
+	/*bool operator==(const SkinnedVertex& other) const
 	{
 		if (Pos.x != other.Pos.x || Pos.y != other.Pos.y || Pos.z != other.Pos.z)
 			return false;
@@ -85,14 +82,8 @@ struct SkinnedVertex
 		if (BoneIndices[0] != other.BoneIndices[0] || BoneIndices[1] != other.BoneIndices[1] || BoneIndices[2] != other.BoneIndices[2] || BoneIndices[3] != other.BoneIndices[3])
 			return false;
 
-		if (Weight != other.Weight)
-			return false;
-
-		if (Indice != other.Indice)
-			return false;
-
 		return true;
-	}
+	}*/
 };
 
 // Stores the resources needed for the CPU to build the command lists

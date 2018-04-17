@@ -115,7 +115,7 @@ void RollingTheBall::Update(const GameTimer& gt)
 	}
 
 	UpdateObjectCBs(gt);
-	//UpdateAnimationCBs(gt);
+	UpdateAnimationCBs(gt);
 	UpdateMainPassCB(gt);
 	UpdateMaterialCB(gt);
 }
@@ -171,7 +171,10 @@ void RollingTheBall::Draw(const GameTimer& gt)
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Opaque]);
 
 	// TODO
-	mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
+	if (!mIsWireframe)
+	{
+		mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
+	}
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
 
 	mCommandList->OMSetStencilRef(0);
@@ -658,6 +661,10 @@ void RollingTheBall::UpdateAnimationCBs(const GameTimer & gt)
 		std::end(mSkinnedModelInst->FinalTransforms),
 		&skinnedConstants.BoneTransforms[0]);
 
+	/*std::copy(
+		std::begin(mSkinnedModelInst->FinalTransforms),
+		std::end(mSkinnedModelInst->FinalTransforms),
+		&skinnedConstants.BoneTransforms[0]);*/
 	currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
@@ -950,8 +957,8 @@ void RollingTheBall::BuildShadersAndInputLayout()
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{ "WEIGHTS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{ "BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 56, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	{ "WEIGHTS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	{ "BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 }
 
@@ -1113,7 +1120,7 @@ void RollingTheBall::BuildFbxGeometry()
 
 	auto geo = std::make_unique<MeshGeometry>();
 	geo->Name = "FbxGeo";
-
+	
 	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
 	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), outVertices.data(), vbByteSize);
 
@@ -1234,9 +1241,9 @@ void RollingTheBall::BuildPSOs()
 	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
 
-
 	// PSO for skinned
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaquePsoDesc = opaquePsoDesc;
+	skinnedOpaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 	skinnedOpaquePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
 	skinnedOpaquePsoDesc.VS =
 	{

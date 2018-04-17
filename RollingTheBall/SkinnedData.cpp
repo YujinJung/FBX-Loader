@@ -35,18 +35,20 @@ void BoneAnimation::Interpolate(float t, XMFLOAT4X4& M)const
 		XMVECTOR S = XMLoadFloat3(&Keyframes.front().Scale);
 		XMVECTOR P = XMLoadFloat3(&Keyframes.front().Translation);
 		XMVECTOR Q = XMLoadFloat4(&Keyframes.front().RotationQuat);
+		XMVECTOR RQ = XMQuaternionRotationRollPitchYawFromVector(Q);
 
 		XMVECTOR zero = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-		XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, Q, P));
+		XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, RQ, P));
 	}
 	else if (t >= Keyframes.back().TimePos)
 	{
 		XMVECTOR S = XMLoadFloat3(&Keyframes.back().Scale);
 		XMVECTOR P = XMLoadFloat3(&Keyframes.back().Translation);
 		XMVECTOR Q = XMLoadFloat4(&Keyframes.back().RotationQuat);
+		XMVECTOR RQ = XMQuaternionRotationRollPitchYawFromVector(Q);
 
 		XMVECTOR zero = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-		XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, Q, P));
+		XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, RQ, P));
 	}
 	else
 	{
@@ -64,10 +66,12 @@ void BoneAnimation::Interpolate(float t, XMFLOAT4X4& M)const
 
 				XMVECTOR q0 = XMLoadFloat4(&Keyframes[i].RotationQuat);
 				XMVECTOR q1 = XMLoadFloat4(&Keyframes[i + 1].RotationQuat);
+				XMVECTOR rq0 = XMQuaternionRotationRollPitchYawFromVector(q0);
+				XMVECTOR rq1 = XMQuaternionRotationRollPitchYawFromVector(q1);
 
 				XMVECTOR S = XMVectorLerp(s0, s1, lerpPercent);
 				XMVECTOR P = XMVectorLerp(p0, p1, lerpPercent);
-				XMVECTOR Q = XMQuaternionSlerp(q0, q1, lerpPercent);
+				XMVECTOR Q = XMQuaternionSlerp(rq0, rq1, lerpPercent);
 
 				XMVECTOR zero = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
 				XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, Q, P));
