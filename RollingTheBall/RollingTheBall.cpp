@@ -115,7 +115,7 @@ void RollingTheBall::Update(const GameTimer& gt)
 	}
 
 	UpdateObjectCBs(gt);
-	UpdateAnimationCBs(gt);
+	//UpdateAnimationCBs(gt);
 	UpdateMainPassCB(gt);
 	UpdateMaterialCB(gt);
 }
@@ -163,6 +163,7 @@ void RollingTheBall::Draw(const GameTimer& gt)
 	passCbvHandle.Offset(passCbvIndex, mCbvSrvDescriptorSize);
 	mCommandList->SetGraphicsRootDescriptorTable(3, passCbvHandle);
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Opaque]);
+	//DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
 
 	mCommandList->OMSetStencilRef(0);
 	mCommandList->SetPipelineState(mPSOs["shadow"].Get());
@@ -826,9 +827,8 @@ void RollingTheBall::BuildConstantBufferViews()
 		}
 	}
 
-	UINT passCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(PassConstants));
-
 	// Last three descriptors are the pass CBVs for each frame resource.
+	UINT passCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(PassConstants));
 	for (int frameIndex = 0; frameIndex < gNumFrameResources; ++frameIndex)
 	{
 		auto passCB = mFrameResources[frameIndex]->PassCB->Resource();
@@ -845,22 +845,42 @@ void RollingTheBall::BuildConstantBufferViews()
 
 		md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
 	}
+
+	// Animation Skin
+	UINT skinnedCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(SkinnedConstants));
+	for (int frameIndex = 0; frameIndex < gNumFrameResources; ++frameIndex)
+	{
+		auto skinnedCB = mFrameResources[frameIndex]->SkinnedCB->Resource();
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddress = skinnedCB->GetGPUVirtualAddress();
+
+		// Offset to the pass cbv in the descriptor heap.
+		int heapIndex = mSkinCbvOffset + frameIndex;
+		auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
+		handle.Offset(heapIndex, mCbvSrvDescriptorSize);
+
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+		cbvDesc.BufferLocation = cbAddress;
+		cbvDesc.SizeInBytes = skinnedCBByteSize;
+
+		md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+	}
 }
 
 void RollingTheBall::BuildRootSignature()
 {
-	CD3DX12_DESCRIPTOR_RANGE cbvTable[3];
+	CD3DX12_DESCRIPTOR_RANGE cbvTable[4];
 
 	cbvTable[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
 	cbvTable[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);
 	cbvTable[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2);
+	cbvTable[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 3);
 
 	CD3DX12_DESCRIPTOR_RANGE texTable;
 	texTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
 	// Root parameter can be a table, root descriptor or root constants.
 	// Objects, Materials, Passes
-	CD3DX12_ROOT_PARAMETER slotRootParameter[4];
+	CD3DX12_ROOT_PARAMETER slotRootParameter[5];
 
 	// Create root CBVs.
 
@@ -868,11 +888,12 @@ void RollingTheBall::BuildRootSignature()
 	slotRootParameter[1].InitAsDescriptorTable(1, &cbvTable[0]);
 	slotRootParameter[2].InitAsDescriptorTable(1, &cbvTable[1]);
 	slotRootParameter[3].InitAsDescriptorTable(1, &cbvTable[2]);
+	slotRootParameter[4].InitAsDescriptorTable(1, &cbvTable[3]);
 
 	auto staticSamplers = GetStaticSamplers();
 
 	// A root signature is an array of root parameters.
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(4, slotRootParameter,
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(5, slotRootParameter,
 		(UINT)staticSamplers.size(), staticSamplers.data(),
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -893,6 +914,7 @@ void RollingTheBall::BuildRootSignature()
 		serializedRootSig->GetBufferPointer(),
 		serializedRootSig->GetBufferSize(),
 		IID_PPV_ARGS(mRootSignature.GetAddressOf())));
+
 }
 
 void RollingTheBall::BuildShadersAndInputLayout()
@@ -1136,7 +1158,7 @@ void RollingTheBall::BuildMaterials()
 	auto shadow0 = std::make_unique<Material>();
 	shadow0->Name = "shadow0";
 	shadow0->MatCBIndex = 5;
-	shadow0->DiffuseSrvHeapIndex = 4;
+	shadow0->DiffuseSrvHeapIndex = 5;
 	shadow0->DiffuseAlbedo = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.5f);
 	shadow0->FresnelR0 = XMFLOAT3(0.001f, 0.001f, 0.001f);
 	shadow0->Roughness = 0.0f;
@@ -1147,6 +1169,9 @@ void RollingTheBall::BuildMaterials()
 	mMaterials["tile0"] = std::move(tile0);
 	mMaterials["grass0"] = std::move(grass0);
 	mMaterials["shadow0"] = std::move(shadow0);
+
+	// TODO : fbx material
+
 }
 
 void RollingTheBall::BuildPSOs()
@@ -1243,7 +1268,7 @@ void RollingTheBall::BuildFrameResources()
 
 void RollingTheBall::BuildRenderItems()
 {
-	UINT objCBIndex = 2;
+	UINT objCBIndex = 3;
 
 	auto gridRitem = std::make_unique<RenderItem>();
 	XMStoreFloat4x4(&gridRitem->World, XMMatrixScaling(2.0f, 1.0f, 10.0f));
@@ -1257,23 +1282,6 @@ void RollingTheBall::BuildRenderItems()
 	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(gridRitem));
 
-	auto lineRitem = std::make_unique<RenderItem>();
-	// Line
-	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
-	// Cone
-	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
-	//Tank because of size
-	XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
-
-	XMStoreFloat4x4(&lineRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
-	lineRitem->ObjCBIndex = objCBIndex++;
-	lineRitem->Mat = mMaterials["bricks0"].get();
-	lineRitem->Geo = mGeometries["FbxGeo"].get();
-	lineRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	lineRitem->StartIndexLocation = lineRitem->Geo->DrawArgs["Fbx"].StartIndexLocation;
-	lineRitem->BaseVertexLocation = lineRitem->Geo->DrawArgs["Fbx"].BaseVertexLocation;
-	lineRitem->IndexCount = lineRitem->Geo->DrawArgs["Fbx"].IndexCount;
-	mAllRitems.push_back(std::move(lineRitem));
 
 	XMMATRIX brickTexTransform = XMMatrixScaling(1.0f, 1.0f, 1.0f);
 	for (int i = 0; i < 15; ++i)
@@ -1482,35 +1490,58 @@ void RollingTheBall::BuildRenderItems()
 	mAllRitems.push_back(std::move(playerRitem));
 	mAllRitems.push_back(std::move(shadowedPlayerRitem));
 
-	//for (UINT i = 0; i < mSkinnedMats.size(); ++i)
-	//{
-	//	std::string submeshName = "sm_" + std::to_string(i);
+	/*for (UINT i = 0; i < mSkinnedMats.size(); ++i)
+	{
+		std::string submeshName = "sm_" + std::to_string(i);
 
-	//	auto ritem = std::make_unique<RenderItem>();
+		auto ritem = std::make_unique<RenderItem>();
 
-	//	// Reflect to change coordinate system from the RHS the data was exported out as.
-	//	XMMATRIX modelScale = XMMatrixScaling(0.05f, 0.05f, -0.05f);
-	//	XMMATRIX modelRot = XMMatrixRotationY(MathHelper::Pi);
-	//	XMMATRIX modelOffset = XMMatrixTranslation(0.0f, 0.0f, -5.0f);
-	//	XMStoreFloat4x4(&ritem->World, modelScale*modelRot*modelOffset);
+		// Reflect to change coordinate system from the RHS the data was exported out as.
+		XMMATRIX modelScale = XMMatrixScaling(0.05f, 0.05f, -0.05f);
+		XMMATRIX modelRot = XMMatrixRotationY(MathHelper::Pi);
+		XMMATRIX modelOffset = XMMatrixTranslation(0.0f, 0.0f, -5.0f);
+		XMStoreFloat4x4(&ritem->World, modelScale*modelRot*modelOffset);
 
-	//	ritem->TexTransform = MathHelper::Identity4x4();
-	//	ritem->ObjCBIndex = objCBIndex++;
-	//	ritem->Mat = mMaterials[mSkinnedMats[i].Name].get();
-	//	ritem->Geo = mGeometries[mSkinnedModelFilename].get();
-	//	ritem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	//	ritem->IndexCount = ritem->Geo->DrawArgs[submeshName].IndexCount;
-	//	ritem->StartIndexLocation = ritem->Geo->DrawArgs[submeshName].StartIndexLocation;
-	//	ritem->BaseVertexLocation = ritem->Geo->DrawArgs[submeshName].BaseVertexLocation;
+		ritem->TexTransform = MathHelper::Identity4x4();
+		ritem->ObjCBIndex = objCBIndex++;
+		ritem->Mat = mMaterials[mSkinnedMats[i].Name].get();
+		ritem->Geo = mGeometries[mSkinnedModelFilename].get();
+		ritem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		ritem->IndexCount = ritem->Geo->DrawArgs[submeshName].IndexCount;
+		ritem->StartIndexLocation = ritem->Geo->DrawArgs[submeshName].StartIndexLocation;
+		ritem->BaseVertexLocation = ritem->Geo->DrawArgs[submeshName].BaseVertexLocation;
 
-	//	// All render items for this solider.m3d instance share
-	//	// the same skinned model instance.
-	//	ritem->SkinnedCBIndex = 0;
-	//	ritem->SkinnedModelInst = mSkinnedModelInst.get();
+		// All render items for this solider.m3d instance share
+		// the same skinned model instance.
+		ritem->SkinnedCBIndex = 0;
+		ritem->SkinnedModelInst = mSkinnedModelInst.get();
 
-	//	mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(ritem.get());
-	//	mAllRitems.push_back(std::move(ritem));
-	//}
+		mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(ritem.get());
+		mAllRitems.push_back(std::move(ritem));
+	}*/
+
+	auto FbxRitem = std::make_unique<RenderItem>();
+	// Line
+	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
+	// Cone
+	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
+	//Tank because of size
+	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+
+	XMStoreFloat4x4(&FbxRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
+	FbxRitem->ObjCBIndex = 2;
+	FbxRitem->Mat = mMaterials["bricks0"].get();
+	FbxRitem->Geo = mGeometries["FbxGeo"].get();
+	FbxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	FbxRitem->StartIndexLocation = FbxRitem->Geo->DrawArgs["Fbx"].StartIndexLocation;
+	FbxRitem->BaseVertexLocation = FbxRitem->Geo->DrawArgs["Fbx"].BaseVertexLocation;
+	FbxRitem->IndexCount = FbxRitem->Geo->DrawArgs["Fbx"].IndexCount;
+
+	FbxRitem->SkinnedCBIndex = 0;
+	FbxRitem->SkinnedModelInst = mSkinnedModelInst.get();
+
+	mRitems[(int)RenderLayer::SkinnedOpaque].push_back(FbxRitem.get());
+	mAllRitems.push_back(std::move(FbxRitem));
 }
 
 void RollingTheBall::BuildObjectShadows()
@@ -1562,22 +1593,22 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 		auto matCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 		matCbvHandle.Offset(matCbvIndex, mCbvSrvDescriptorSize);
 
-	/*	UINT skinnedIndex = mSkinCbvOffset + mCurrFrameResourceIndex * (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size() + ri->SkinnedCBIndex;
+		UINT skinnedIndex = mSkinCbvOffset + mCurrFrameResourceIndex * (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size() + ri->SkinnedCBIndex;
 		auto skinCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-		skinCbvHandle.Offset(skinnedIndex, mCbvSrvDescriptorSize);*/
+		skinCbvHandle.Offset(skinnedIndex, mCbvSrvDescriptorSize);
 
 		cmdList->SetGraphicsRootDescriptorTable(0, tex);
 		cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
 		cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
 
-		//if (ri->SkinnedModelInst != nullptr)
-		//{
-		//	cmdList->SetGraphicsRootDescriptorTable(3, skinCbvHandle);
-		//}
-		//else
-		//{
-		//	cmdList->SetGraphicsRootConstantBufferView(3, 0);
-		//}
+		/*if (ri->SkinnedModelInst != nullptr)
+		{
+			cmdList->SetGraphicsRootDescriptorTable(3, skinCbvHandle);
+		}
+		else
+		{
+			cmdList->SetGraphicsRootConstantBufferView(3, 0);
+		}*/
 
 		cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 	}

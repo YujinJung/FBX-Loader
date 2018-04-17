@@ -53,6 +53,8 @@ public:
 
 	HRESULT LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int32_t>& outIndexVector, SkinnedData& outSkinnedData);
 
+	void GetAnimation(FbxScene * pFbxScene, FbxNode * pFbxChildNode, std::vector<DirectX::XMFLOAT4X4>& mBoneOffsets, AnimationClip & animation, std::string & animationName);
+
 	void GetVerticesAndIndices(fbxsdk::FbxMesh * pMesh, std::vector<Vertex> & outVertexVector, std::vector<int32_t> & outIndexVector);
 
 	void ReadVertex(fbxsdk::FbxMesh * pMesh, const uint32_t &j, const uint32_t &k, Vertex &outVertex, fbxsdk::FbxVector4 * pVertices);
