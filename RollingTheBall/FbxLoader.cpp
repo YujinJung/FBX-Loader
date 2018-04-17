@@ -19,7 +19,7 @@ FbxLoader::~FbxLoader()
 
 FbxManager * gFbxManager = nullptr;
 
-HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int32_t>& outIndexVector, SkinnedData& outSkinnedData)
+HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<int32_t>& outIndexVector, SkinnedData& outSkinnedData)
 {
 	if (gFbxManager == nullptr)
 	{
@@ -58,6 +58,10 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 		std::vector<DirectX::XMFLOAT4X4> mBoneOffsets;
 		std::unordered_map<std::string, AnimationClip> mAnimations;
 
+		// tempData
+		std::vector<std::string> boneName;
+		std::vector<Vertex> tempVertexVector;
+
 		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
 		{
 			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
@@ -65,6 +69,20 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 			FbxNodeAttribute::EType AttributeType = pMesh->GetAttributeType();
 			if (!pMesh || !AttributeType) { continue; }
 
+			switch (AttributeType)
+			{
+			case FbxNodeAttribute::eSkeleton:
+				GetSkeletonHierarchy(pFbxChildNode, 0, -1, mBoneHierarchy, boneName);
+				break;
+			}
+		}
+
+		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
+		{
+			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
+			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
+			FbxNodeAttribute::EType AttributeType = pMesh->GetAttributeType();
+			if (!pMesh || !AttributeType) { continue; }
 
 			// Animation
 			AnimationClip animation;
@@ -74,17 +92,14 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 			{
 			case FbxNodeAttribute::eMesh:
 				// Get Vertices and indices info
-				GetVerticesAndIndices(pMesh, outVertexVector, outIndexVector);
+				GetVerticesAndIndices(pMesh, tempVertexVector, outIndexVector);
 
+				outVertexVector.resize(tempVertexVector.size());
 				// Get Animation Clip
-				GetAnimation(pFbxScene, pFbxChildNode, mBoneOffsets, animation, animationName);
+				GetAnimation(pFbxScene, pFbxChildNode, mBoneOffsets, boneName, animation, animationName, outVertexVector, tempVertexVector);
 				mAnimations[animationName] = animation;
 				outSkinnedData.SetAnimationName(animationName);
 
-				break;
-
-			case FbxNodeAttribute::eSkeleton:
-				GetSkeletonHierarchy(pFbxChildNode, 0, -1, mBoneHierarchy);
 				break;
 			}
 
@@ -95,7 +110,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<Vertex>& outVertexVector, std::vector<int
 	return S_OK;
 }
 
-void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::vector<DirectX::XMFLOAT4X4> &mBoneOffsets, AnimationClip &animation, std::string &animationName)
+void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::vector<DirectX::XMFLOAT4X4> &mBoneOffsets, const std::vector<std::string>& boneName, AnimationClip &animation, std::string &animationName, std::vector<SkinnedVertex>& outVertexVector, const std::vector<Vertex>& tempVertexVector)
 {
 	FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
 	FbxAMatrix geometryTransform = GetGeometryTransformation(pFbxChildNode);
@@ -129,6 +144,22 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			}
 			mBoneOffsets.push_back(boneOffset);
 
+			std::string currJointName = pCurrCluster->GetLink()->GetName();
+			BYTE currJointIndex;
+			for (currJointIndex = 0; currJointIndex< boneName.size(); ++currJointIndex)
+			{
+				if (boneName[currJointIndex] == currJointName)
+					break;
+			}
+
+			auto pCurrControlPointIndices = pCurrCluster->GetControlPointIndices();
+			auto pCurrControlPointWeights = pCurrCluster->GetControlPointWeights();
+
+			for (uint32_t i = 0; i < pCurrCluster->GetControlPointIndicesCount(); ++i)
+			{
+				outVertexVector[pCurrControlPointIndices[i]].Weight.push_back(pCurrControlPointWeights[i]);
+				outVertexVector[pCurrControlPointIndices[i]].Indice.push_back(currJointIndex);
+			}
 
 			BoneAnimation boneAnim;
 
@@ -159,13 +190,54 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			animation.BoneAnimations.push_back(boneAnim);
 		}
 	}
+
+	for (uint32_t i = 0; i < outVertexVector.size(); ++i)
+	{
+		auto& currVertexVector = outVertexVector[i];
+		currVertexVector.BoneWeights = { 0.0f, 0.0f, 0.0f };
+
+		currVertexVector.Pos = tempVertexVector[i].Pos;
+		currVertexVector.Normal = tempVertexVector[i].Normal;
+		currVertexVector.TexC = tempVertexVector[i].TexC;
+
+		// weight
+		for (uint32_t j = 0; j < currVertexVector.Weight.size(); ++j)
+		{
+			if (j == 3)
+				break;
+			switch (j)
+			{
+			case 0:
+				currVertexVector.BoneWeights.x = currVertexVector.Weight[j];
+				break;
+			case 1:
+				currVertexVector.BoneWeights.y = currVertexVector.Weight[j];
+				break;
+			case 2:
+				currVertexVector.BoneWeights.z = currVertexVector.Weight[j];
+				break;
+			}
+		}
+			
+		// indice
+		if (currVertexVector.Indice.size() < 4)
+		{
+			currVertexVector.BoneIndices[0] = currVertexVector.BoneIndices[1]
+				= currVertexVector.BoneIndices[2] = currVertexVector.BoneIndices[3] = 0;
+		}
+		for (uint32_t j = 0; j < currVertexVector.Indice.size(); ++j)
+		{
+			if (j == 4)
+				break;
+			
+			currVertexVector.BoneIndices[j] = currVertexVector.Indice[j];
+		}
+	}
 }
 
-void FbxLoader::GetVerticesAndIndices(fbxsdk::FbxMesh * pMesh, std::vector<Vertex> & outVertexVector, std::vector<int32_t> & outIndexVector)
+void FbxLoader::GetVerticesAndIndices(fbxsdk::FbxMesh * pMesh, std::vector<Vertex> & tempVertexVector, std::vector<int32_t> & outIndexVector)
 {
-	// Temp
 	std::unordered_map<Vertex, int32_t> indexMapping;
-
 	FbxVector4* pVertices = pMesh->GetControlPoints();
 
 	uint32_t vCount = pMesh->GetControlPointsCount(); // Vertex
@@ -189,10 +261,10 @@ void FbxLoader::GetVerticesAndIndices(fbxsdk::FbxMesh * pMesh, std::vector<Verte
 				}
 				else
 				{
-					int32_t index = outVertexVector.size();
+					int32_t index = tempVertexVector.size();
 					indexMapping[outVertex] = index;
 					outIndexVector.push_back(index);
-					outVertexVector.push_back(outVertex);
+					tempVertexVector.push_back(outVertex);
 				}
 			}
 		}
@@ -201,31 +273,35 @@ void FbxLoader::GetVerticesAndIndices(fbxsdk::FbxMesh * pMesh, std::vector<Verte
 
 void FbxLoader::ReadVertex(fbxsdk::FbxMesh * pMesh, const uint32_t &j, const uint32_t &k, Vertex &outVertex, fbxsdk::FbxVector4 * pVertices)
 {
+	// TODO : DELETE
+	float t = 0.01f;
+
 	int controlPointIndex = pMesh->GetPolygonVertex(j, k);
-	outVertex.Pos.x = static_cast<float>(pVertices[controlPointIndex].mData[0]);
-	outVertex.Pos.y = static_cast<float>(pVertices[controlPointIndex].mData[1]);
-	outVertex.Pos.z = static_cast<float>(pVertices[controlPointIndex].mData[2]);
+	outVertex.Pos.x = static_cast<float>(pVertices[controlPointIndex].mData[0]) * t;
+	outVertex.Pos.y = static_cast<float>(pVertices[controlPointIndex].mData[1]) * t;
+	outVertex.Pos.z = static_cast<float>(pVertices[controlPointIndex].mData[2]) * t;
 
 	FbxVector4 pNormal;
 	pMesh->GetPolygonVertexNormal(j, k, pNormal);
-	outVertex.Normal.x = pNormal.mData[0];
-	outVertex.Normal.y = pNormal.mData[1];
-	outVertex.Normal.z = pNormal.mData[2];
+	outVertex.Normal.x = pNormal.mData[0] * t;
+	outVertex.Normal.y = pNormal.mData[1] * t;
+	outVertex.Normal.z = pNormal.mData[2] * t;
 
 	FbxVector2 pUVs;
 	bool bUnMappedUV;
 	pMesh->GetPolygonVertexUV(j, k, "", pUVs, bUnMappedUV);
-	outVertex.TexC.x = pUVs.mData[0];
-	outVertex.TexC.y = pUVs.mData[1];
+	outVertex.TexC.x = pUVs.mData[0] * t;
+	outVertex.TexC.y = pUVs.mData[1] * t;
 }
 
-void FbxLoader::GetSkeletonHierarchy(FbxNode * inNode, int curIndex, int parentIndex, std::vector<int>& mBoneHierarchy)
+void FbxLoader::GetSkeletonHierarchy(FbxNode * inNode, int curIndex, int parentIndex, std::vector<int>& mBoneHierarchy, std::vector<std::string>& boneName)
 {
 	mBoneHierarchy.push_back(parentIndex);
+	boneName.push_back(inNode->GetName());
 
 	for (int i = 0; i < inNode->GetChildCount(); ++i)
 	{
-		GetSkeletonHierarchy(inNode->GetChild(i), mBoneHierarchy.size(), curIndex, mBoneHierarchy);
+		GetSkeletonHierarchy(inNode->GetChild(i), mBoneHierarchy.size(), curIndex, mBoneHierarchy, boneName);
 	}
 }
 

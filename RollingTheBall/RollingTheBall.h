@@ -160,6 +160,7 @@ private:
 	void BuildFrameResources();
 	void UpdateObjectShadows();
 	void BuildRenderItems();
+	void BuildFbx(UINT objCBIndex);
 	void BuildObjectShadows();
 	void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
@@ -216,7 +217,7 @@ private:
 	* mouse left click - EyeTarget Move
 	* mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
 	*/
-	const float mCameraRadius = 15.0f;
+	const float mCameraRadius = 25.0f;
 	float mCameraPhi = XM_PIDIV2;
 	float mCameraTheta = 0.0f;
 

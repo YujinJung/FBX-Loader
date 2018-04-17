@@ -158,11 +158,11 @@ void RollingTheBall::Draw(const GameTimer& gt)
 
 	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 
-	int skinnedCbvIndex = mSkinCbvOffset + mCurrFrameResourceIndex;
-	auto skinnedCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-	skinnedCbvHandle.Offset(skinnedCbvIndex, mCbvSrvDescriptorSize);
-	mCommandList->SetGraphicsRootDescriptorTable(4, skinnedCbvHandle);
-	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
+	//int skinnedCbvIndex = mSkinCbvOffset + mCurrFrameResourceIndex;
+	//auto skinnedCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+	//skinnedCbvHandle.Offset(skinnedCbvIndex, mCbvSrvDescriptorSize);
+	//mCommandList->SetGraphicsRootDescriptorTable(4, skinnedCbvHandle);
+	//DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
 
 	int passCbvIndex = mPassCbvOffset + mCurrFrameResourceIndex;
 	auto passCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
@@ -170,6 +170,9 @@ void RollingTheBall::Draw(const GameTimer& gt)
 	mCommandList->SetGraphicsRootDescriptorTable(3, passCbvHandle);
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Opaque]);
 
+	// TODO
+	mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
+	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
 
 	mCommandList->OMSetStencilRef(0);
 	mCommandList->SetPipelineState(mPSOs["shadow"].Get());
@@ -719,7 +722,7 @@ void RollingTheBall::BuildDescriptorHeaps()
 	// Save an offset to the start of the pass CBVs.  These are the last 3 descriptors.
 	mMatCbvOffset = objCount * gNumFrameResources + mObjCbvOffset;
 	mPassCbvOffset = matCount * gNumFrameResources + mMatCbvOffset;
-	mSkinCbvOffset = skinCount* gNumFrameResources + mPassCbvOffset;
+	mSkinCbvOffset = skinCount * gNumFrameResources + mPassCbvOffset;
 
 	// mPassCbvOffset + (passSize)
 	// passSize = 1 * gNumFrameResources
@@ -925,14 +928,30 @@ void RollingTheBall::BuildRootSignature()
 
 void RollingTheBall::BuildShadersAndInputLayout()
 {
+	const D3D_SHADER_MACRO skinnedDefines[] =
+	{
+		"SKINNED", "1",
+		NULL, NULL
+	};
+
 	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "VS", "vs_5_1");
+	mShaders["skinnedVS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", skinnedDefines, "VS", "vs_5_1");
 	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "PS", "ps_5_1");
 
 	mInputLayout =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
+	mSkinnedInputLayout =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	{ "WEIGHTS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	{ "BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 56, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 }
 
@@ -1069,7 +1088,7 @@ void RollingTheBall::BuildFbxGeometry()
 {
 	FbxLoader fbx;
 
-	std::vector<Vertex> outVertices;
+	std::vector<SkinnedVertex> outVertices;
 	std::vector<std::int32_t> outIndices;
 	fbx.LoadFBX(outVertices, outIndices, mSkinnedInfo);
 
@@ -1089,7 +1108,7 @@ void RollingTheBall::BuildFbxGeometry()
 	vCount = outVertices.size();
 	iCount = outIndices.size();
 
-	const UINT vbByteSize = (UINT)outVertices.size() * sizeof(Vertex);
+	const UINT vbByteSize = (UINT)outVertices.size() * sizeof(SkinnedVertex);
 	const UINT ibByteSize = (UINT)outIndices.size() * sizeof(std::int32_t);
 
 	auto geo = std::make_unique<MeshGeometry>();
@@ -1104,7 +1123,7 @@ void RollingTheBall::BuildFbxGeometry()
 	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), outVertices.data(), vbByteSize, geo->VertexBufferUploader);
 	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), outIndices.data(), ibByteSize, geo->IndexBufferUploader);
 
-	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexByteStride = sizeof(SkinnedVertex);
 	geo->VertexBufferByteSize = vbByteSize;
 	geo->IndexFormat = DXGI_FORMAT_R32_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
@@ -1215,6 +1234,23 @@ void RollingTheBall::BuildPSOs()
 	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
 
+
+	// PSO for skinned
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaquePsoDesc = opaquePsoDesc;
+	skinnedOpaquePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
+	skinnedOpaquePsoDesc.VS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
+		mShaders["skinnedVS"]->GetBufferSize()
+	};
+	skinnedOpaquePsoDesc.PS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["opaquePS"]->GetBufferPointer()),
+		mShaders["opaquePS"]->GetBufferSize()
+	};
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
+
+
 	// PSO for Shadow
 	D3D12_RENDER_TARGET_BLEND_DESC shadowBlendDesc;
 	shadowBlendDesc.BlendEnable = true;
@@ -1267,15 +1303,14 @@ void RollingTheBall::BuildFrameResources()
 	{
 		mFrameResources.push_back(std::make_unique<FrameResource>(
 			md3dDevice.Get(),
-			1, (UINT)mAllRitems.size(), 
+			1, (UINT)mAllRitems.size(),
 			(UINT)mMaterials.size(), 1));
 	}
 }
 
 void RollingTheBall::BuildRenderItems()
 {
-	UINT objCBIndex = 3;
-
+	UINT objCBIndex = 2;
 	auto gridRitem = std::make_unique<RenderItem>();
 	XMStoreFloat4x4(&gridRitem->World, XMMatrixScaling(2.0f, 1.0f, 10.0f));
 	XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(8.0f, 80.0f, 1.0f));
@@ -1474,7 +1509,7 @@ void RollingTheBall::BuildRenderItems()
 	XMStoreFloat4x4(&playerRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f)*XMMatrixTranslation(0.0f, 2.0f, 0.0f));
 	XMStoreFloat4x4(&playerRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	playerRitem->ObjCBIndex = 0;
-	playerRitem->Mat = mMaterials["grass0"].get();
+	playerRitem->Mat = mMaterials["tile0"].get();
 	playerRitem->Geo = mGeometries["shapeGeo"].get();
 	playerRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	playerRitem->IndexCount = playerRitem->Geo->DrawArgs["sphere"].IndexCount;
@@ -1498,34 +1533,39 @@ void RollingTheBall::BuildRenderItems()
 
 	/*for (UINT i = 0; i < mSkinnedMats.size(); ++i)
 	{
-		std::string submeshName = "sm_" + std::to_string(i);
+	std::string submeshName = "sm_" + std::to_string(i);
 
-		auto ritem = std::make_unique<RenderItem>();
+	auto ritem = std::make_unique<RenderItem>();
 
-		// Reflect to change coordinate system from the RHS the data was exported out as.
-		XMMATRIX modelScale = XMMatrixScaling(0.05f, 0.05f, -0.05f);
-		XMMATRIX modelRot = XMMatrixRotationY(MathHelper::Pi);
-		XMMATRIX modelOffset = XMMatrixTranslation(0.0f, 0.0f, -5.0f);
-		XMStoreFloat4x4(&ritem->World, modelScale*modelRot*modelOffset);
+	// Reflect to change coordinate system from the RHS the data was exported out as.
+	XMMATRIX modelScale = XMMatrixScaling(0.05f, 0.05f, -0.05f);
+	XMMATRIX modelRot = XMMatrixRotationY(MathHelper::Pi);
+	XMMATRIX modelOffset = XMMatrixTranslation(0.0f, 0.0f, -5.0f);
+	XMStoreFloat4x4(&ritem->World, modelScale*modelRot*modelOffset);
 
-		ritem->TexTransform = MathHelper::Identity4x4();
-		ritem->ObjCBIndex = objCBIndex++;
-		ritem->Mat = mMaterials[mSkinnedMats[i].Name].get();
-		ritem->Geo = mGeometries[mSkinnedModelFilename].get();
-		ritem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		ritem->IndexCount = ritem->Geo->DrawArgs[submeshName].IndexCount;
-		ritem->StartIndexLocation = ritem->Geo->DrawArgs[submeshName].StartIndexLocation;
-		ritem->BaseVertexLocation = ritem->Geo->DrawArgs[submeshName].BaseVertexLocation;
+	ritem->TexTransform = MathHelper::Identity4x4();
+	ritem->ObjCBIndex = objCBIndex++;
+	ritem->Mat = mMaterials[mSkinnedMats[i].Name].get();
+	ritem->Geo = mGeometries[mSkinnedModelFilename].get();
+	ritem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	ritem->IndexCount = ritem->Geo->DrawArgs[submeshName].IndexCount;
+	ritem->StartIndexLocation = ritem->Geo->DrawArgs[submeshName].StartIndexLocation;
+	ritem->BaseVertexLocation = ritem->Geo->DrawArgs[submeshName].BaseVertexLocation;
 
-		// All render items for this solider.m3d instance share
-		// the same skinned model instance.
-		ritem->SkinnedCBIndex = 0;
-		ritem->SkinnedModelInst = mSkinnedModelInst.get();
+	// All render items for this solider.m3d instance share
+	// the same skinned model instance.
+	ritem->SkinnedCBIndex = 0;
+	ritem->SkinnedModelInst = mSkinnedModelInst.get();
 
-		mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(ritem.get());
-		mAllRitems.push_back(std::move(ritem));
+	mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(ritem.get());
+	mAllRitems.push_back(std::move(ritem));
 	}*/
 
+	BuildFbx(objCBIndex);
+}
+
+void RollingTheBall::BuildFbx(UINT objCBIndex)
+{
 	auto FbxRitem = std::make_unique<RenderItem>();
 	// Line
 	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
@@ -1533,12 +1573,11 @@ void RollingTheBall::BuildRenderItems()
 	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
 	//Tank because of size
 	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
-	XMStoreFloat4x4(&FbxRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
-	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+	//XMStoreFloat4x4(&FbxRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
+	//XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
 
-
-	FbxRitem->ObjCBIndex = 2;
-	FbxRitem->Mat = mMaterials["bricks0"].get();
+	FbxRitem->ObjCBIndex = objCBIndex;
+	FbxRitem->Mat = mMaterials["tile0"].get();
 	FbxRitem->Geo = mGeometries["FbxGeo"].get();
 	FbxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	FbxRitem->StartIndexLocation = FbxRitem->Geo->DrawArgs["Fbx"].StartIndexLocation;
@@ -1578,7 +1617,6 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 
 	if (ritems[0]->SkinnedCBIndex == -1)
 	{
-
 		// For each render item...
 		for (size_t i = 0; i < ritems.size(); ++i)
 		{
@@ -1601,7 +1639,7 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 			UINT matCbvIndex = mMatCbvOffset + mCurrFrameResourceIndex * (UINT)mMaterials.size() + ri->Mat->MatCBIndex;
 			auto matCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 			matCbvHandle.Offset(matCbvIndex, mCbvSrvDescriptorSize);
-			
+
 			cmdList->SetGraphicsRootDescriptorTable(0, tex);
 			cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
 			cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
@@ -1609,7 +1647,7 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 			cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 		}
 	}
-	else if (ritems[0]->SkinnedCBIndex != -1)
+	else if (ritems[0]->SkinnedCBIndex == 0)
 	{
 		auto ri = ritems[0];
 
@@ -1628,7 +1666,6 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 
 		cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 	}
-
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
