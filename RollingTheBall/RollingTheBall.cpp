@@ -11,6 +11,7 @@
 #include "FrameResource.h"
 #include "FbxLoader.h"
 #include "RollingTheBall.h"
+#include <iostream>
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -661,10 +662,26 @@ void RollingTheBall::UpdateAnimationCBs(const GameTimer & gt)
 		std::end(mSkinnedModelInst->FinalTransforms),
 		&skinnedConstants.BoneTransforms[0]);
 
-	/*std::copy(
-		std::begin(mSkinnedModelInst->FinalTransforms),
-		std::end(mSkinnedModelInst->FinalTransforms),
-		&skinnedConstants.BoneTransforms[0]);*/
+	// Final Transform Debug
+	/*for (int i = 0; i < mSkinnedInfo.BoneCount(); ++i)
+	{
+		std::wstring text = L"Final Transform" + std::to_wstring(i) + L"\n";
+		::OutputDebugString(text.c_str());
+
+		for (int j = 0; j < 4; ++j)
+		{
+			for (int k = 0; k < 4; ++k)
+			{
+				std::wstring text =
+					std::to_wstring(skinnedConstants.BoneTransforms[i].m[j][k]) + L" ";
+
+				::OutputDebugString(text.c_str());
+			}
+			std::wstring text = L"\n";
+			::OutputDebugString(text.c_str());
+
+		}
+	}*/
 	currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
@@ -1097,7 +1114,7 @@ void RollingTheBall::BuildFbxGeometry()
 	FbxLoader fbx;
 
 	std::vector<SkinnedVertex> outVertices;
-	std::vector<std::int32_t> outIndices;
+	std::vector<std::uint16_t> outIndices;
 	fbx.LoadFBX(outVertices, outIndices, mSkinnedInfo);
 
 	mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
@@ -1112,12 +1129,33 @@ void RollingTheBall::BuildFbxGeometry()
 		return;
 	}
 
+	// Bone Offset Debug
+	/*for (int i = 0; i < mSkinnedInfo.BoneCount(); ++i)
+	{
+		std::wstring text = L"Bone" + std::to_wstring(i) + L"\n";
+		::OutputDebugString(text.c_str());
+
+		for (int j = 0; j < 4; ++j)
+		{
+			for (int k = 0; k < 4; ++k)
+			{
+				std::wstring text =
+					std::to_wstring(mSkinnedInfo.getBoneOffsets(i).m[j][k]) + L" ";
+
+				::OutputDebugString(text.c_str());
+			}
+			std::wstring text = L"\n";
+			::OutputDebugString(text.c_str());
+
+		}
+	}*/
+
 	UINT vCount = 0, iCount = 0;
 	vCount = outVertices.size();
 	iCount = outIndices.size();
 
 	const UINT vbByteSize = (UINT)outVertices.size() * sizeof(SkinnedVertex);
-	const UINT ibByteSize = (UINT)outIndices.size() * sizeof(std::int32_t);
+	const UINT ibByteSize = (UINT)outIndices.size() * sizeof(std::uint16_t);
 
 	auto geo = std::make_unique<MeshGeometry>();
 	geo->Name = "FbxGeo";
@@ -1133,7 +1171,7 @@ void RollingTheBall::BuildFbxGeometry()
 
 	geo->VertexByteStride = sizeof(SkinnedVertex);
 	geo->VertexBufferByteSize = vbByteSize;
-	geo->IndexFormat = DXGI_FORMAT_R32_UINT;
+	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
 
 	SubmeshGeometry FbxSubmesh;

@@ -28,27 +28,25 @@ float BoneAnimation::GetEndTime()const
 	return f;
 }
 
-void BoneAnimation::Interpolate(float t, XMFLOAT4X4& M)const
+void BoneAnimation::Interpolate(float t, XMFLOAT4X4& M) const
 {
 	if (t <= Keyframes.front().TimePos)
 	{
 		XMVECTOR S = XMLoadFloat3(&Keyframes.front().Scale);
 		XMVECTOR P = XMLoadFloat3(&Keyframes.front().Translation);
 		XMVECTOR Q = XMLoadFloat4(&Keyframes.front().RotationQuat);
-		XMVECTOR RQ = XMQuaternionRotationRollPitchYawFromVector(Q);
 
 		XMVECTOR zero = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-		XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, RQ, P));
+		XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, Q, P));
 	}
 	else if (t >= Keyframes.back().TimePos)
 	{
 		XMVECTOR S = XMLoadFloat3(&Keyframes.back().Scale);
 		XMVECTOR P = XMLoadFloat3(&Keyframes.back().Translation);
 		XMVECTOR Q = XMLoadFloat4(&Keyframes.back().RotationQuat);
-		XMVECTOR RQ = XMQuaternionRotationRollPitchYawFromVector(Q);
 
 		XMVECTOR zero = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-		XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, RQ, P));
+		XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, Q, P));
 	}
 	else
 	{
@@ -66,12 +64,10 @@ void BoneAnimation::Interpolate(float t, XMFLOAT4X4& M)const
 
 				XMVECTOR q0 = XMLoadFloat4(&Keyframes[i].RotationQuat);
 				XMVECTOR q1 = XMLoadFloat4(&Keyframes[i + 1].RotationQuat);
-				XMVECTOR rq0 = XMQuaternionRotationRollPitchYawFromVector(q0);
-				XMVECTOR rq1 = XMQuaternionRotationRollPitchYawFromVector(q1);
 
 				XMVECTOR S = XMVectorLerp(s0, s1, lerpPercent);
 				XMVECTOR P = XMVectorLerp(p0, p1, lerpPercent);
-				XMVECTOR Q = XMQuaternionSlerp(rq0, rq1, lerpPercent);
+				XMVECTOR Q = XMQuaternionSlerp(q0, q1, lerpPercent);
 
 				XMVECTOR zero = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
 				XMStoreFloat4x4(&M, XMMatrixAffineTransformation(S, zero, Q, P));
@@ -188,6 +184,38 @@ void SkinnedData::GetFinalTransforms(const std::string& clipName, float timePos,
 		XMMATRIX offset = XMLoadFloat4x4(&mBoneOffsets[i]);
 		XMMATRIX toRoot = XMLoadFloat4x4(&toRootTransforms[i]);
 		XMMATRIX finalTransform = XMMatrixMultiply(offset, toRoot);
+		finalTransform = finalTransform * XMMatrixScaling(0.01f, 0.01f, 0.01f) * XMMatrixTranslation(0.0f, 5.0f, 0.0f);
+
+		printMatrix(L"Offset", i, offset);
+		printMatrix(L"toRoot", i, toRoot);
+		printMatrix(L"final", i, finalTransform);
+
 		XMStoreFloat4x4(&finalTransforms[i], XMMatrixTranspose(finalTransform));
 	}
 }
+
+void printMatrix(const std::wstring& Name, const int& i, const DirectX::XMMATRIX &M)
+{
+	std::wstring text = Name + std::to_wstring(i) + L"\n";
+	::OutputDebugString(text.c_str());
+
+	for (int j = 0; j < 4; ++j)
+	{
+		for (int k = 0; k < 4; ++k)
+		{
+			std::wstring text =
+				std::to_wstring(M.r[j].m128_f32[k]) + L" ";
+
+			::OutputDebugString(text.c_str());
+		}
+		std::wstring text = L"\n";
+		::OutputDebugString(text.c_str());
+
+	}
+}
+
+DirectX::XMFLOAT4X4 SkinnedData::getBoneOffsets(int num) const
+{
+	return mBoneOffsets.at(num);
+}
+

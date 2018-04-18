@@ -15,7 +15,7 @@ FbxLoader::~FbxLoader()
 
 FbxManager * gFbxManager = nullptr;
 
-HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<int32_t>& outIndexVector, SkinnedData& outSkinnedData)
+HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData)
 {
 	if (gFbxManager == nullptr)
 	{
@@ -28,7 +28,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 	FbxImporter* pImporter = FbxImporter::Create(gFbxManager, "");
 
 	//bool bSuccess = pImporter->Initialize("../Resource/cone.FBX", -1, gFbxManager->GetIOSettings());
-	bool bSuccess = pImporter->Initialize("../Resource/Boxing.FBX", -1, gFbxManager->GetIOSettings());
+	bool bSuccess = pImporter->Initialize("../Resource/Stabbing.FBX", -1, gFbxManager->GetIOSettings());
 	if (!bSuccess) return E_FAIL;
 
 	FbxScene* pFbxScene = FbxScene::Create(gFbxManager, "");
@@ -149,8 +149,8 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			FbxAMatrix transformLinkMatrix;
 			FbxAMatrix globalBindposeInverseMatrix;
 
-			pCurrCluster->GetTransformMatrix(transformMatrix);	// The transformation of the mesh at binding time
-			pCurrCluster->GetTransformLinkMatrix(transformLinkMatrix);	// The transformation of the cluster(joint) at binding time from joint space to world space
+			transformMatrix = pCurrCluster->GetTransformMatrix(transformMatrix);	// The transformation of the mesh at binding time
+			transformLinkMatrix = pCurrCluster->GetTransformLinkMatrix(transformLinkMatrix);	// The transformation of the cluster(joint) at binding time from joint space to world space
 			globalBindposeInverseMatrix = transformLinkMatrix.Inverse() * transformMatrix * geometryTransform;
 
 			std::string currJointName = pCurrCluster->GetLink()->GetName();
@@ -167,6 +167,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 				for (int j = 0; j < 4; ++j)
 				{
 					boneOffset.m[i][j] = globalBindposeInverseMatrix.Get(i, j);
+					//boneOffset.m[i][j] = globalBindposeInverseMatrix.Get(i, j);
 				}
 			}
 			mBoneOffsets[currJointIndex] = boneOffset;
@@ -196,11 +197,14 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 				currTime.SetFrame(i, FbxTime::eFrames24);
 
 				Keyframe key;
-				key.TimePos = i;
-				FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateGlobalTransform(currTime) * geometryTransform;
-				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateGlobalTransform(currTime);
+				key.TimePos = (float)i / 24.0f;
+				FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateLocalTransform(currTime) * geometryTransform;
+				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateLocalTransform(currTime);
+
+				/*FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateGlobalTransform(currTime) * geometryTransform;
+				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateGlobalTransform(currTime);*/
 				key.Translation = { (float)temp.GetT().mData[0],  (float)temp.GetT().mData[1],  (float)temp.GetT().mData[2] };
-				key.RotationQuat = { (float)temp.GetR().mData[0],  (float)temp.GetR().mData[1],  (float)temp.GetR().mData[2] , 0.0f };
+				key.RotationQuat = { (float)temp.GetQ().mData[0],  (float)temp.GetQ().mData[1],  (float)temp.GetQ().mData[2] , (float)temp.GetQ().mData[3] };
 				key.Scale = { (float)temp.GetS().mData[0],  (float)temp.GetS().mData[1],  (float)temp.GetS().mData[2] };
 
 				boneAnim.Keyframes.push_back(key);
@@ -265,9 +269,9 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 	}*/
 }
 
-void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex> & outVertexVector, std::vector<int32_t> & outIndexVector)
+void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex> & outVertexVector, std::vector<uint16_t> & outIndexVector)
 {
-	std::unordered_map<Vertex, int32_t> indexMapping;
+	std::unordered_map<Vertex, uint16_t> indexMapping;
 	std::vector<Vertex> tempVertexVector;
 	int vertexCounter = 0;
 	//FbxVector4* pVertices = pMesh->GetControlPoints();
@@ -314,6 +318,7 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 			temp.Normal.y = pNormal.mData[1] * t;
 			temp.Normal.z = pNormal.mData[2] * t;
 
+			// Need to modify TexC
 			temp.TexC.x = pUVs.mData[0] * t;
 			temp.TexC.y = pUVs.mData[1] * t;
 			/*temp.Normal = normal[k];
@@ -328,13 +333,13 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 			}
 			else
 			{
-				int32_t index = tempVertexVector.size();
+				uint16_t index = tempVertexVector.size();
 				indexMapping[temp] = index;
 				tempVertexVector.push_back(temp);
 				outIndexVector.push_back(index);
 
 				SkinnedVertex skinnedVertexInfo;
-				skinnedVertexInfo.Pos = currCtrlPoint->mPosition;
+				skinnedVertexInfo.Pos = temp.Pos;
 				skinnedVertexInfo.Normal = temp.Normal;
 				skinnedVertexInfo.TexC = temp.TexC;
 

@@ -183,10 +183,12 @@ private:
 	std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> mSkinnedInputLayout;
 
+	// For FBX
 	UINT mSkinnedSrvHeapStart = 0;
 	std::unique_ptr<SkinnedModelInstance> mSkinnedModelInst;
-	SkinnedData mSkinnedInfo;
 	std::vector<std::string> mSkinnedTextureNames;
+	std::vector<std::string> mBoneName;
+	SkinnedData mSkinnedInfo;
 	/*std::string mSkinnedModelFilename = "Models\\soldier.m3d";
 	std::vector<M3DLoader::Subset> mSkinnedSubsets;
 	std::vector<M3DLoader::M3dMaterial> mSkinnedMats;*/
@@ -217,7 +219,7 @@ private:
 	* mouse left click - EyeTarget Move
 	* mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
 	*/
-	const float mCameraRadius = 500.0f;
+	const float mCameraRadius = 20.0f;
 	float mCameraPhi = XM_PIDIV2;
 	float mCameraTheta = 0.0f;
 

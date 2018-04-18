@@ -36,13 +36,13 @@ public:
 	FbxLoader();
 	~FbxLoader();
 
-	HRESULT LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<int32_t>& outIndexVector, SkinnedData& outSkinnedData);
+	HRESULT LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData);
 
 	void GetControlPoints(fbxsdk::FbxNode * pFbxRootNode);
 
 	void GetAnimation(FbxScene * pFbxScene, FbxNode * pFbxChildNode, std::vector<DirectX::XMFLOAT4X4>& mBoneOffsets, const std::vector<std::string>& boneName, AnimationClip & animation, std::string & animationName);
 
-	void GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex>& outVertexVector, std::vector<int32_t>& outIndexVector);
+	void GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector);
 
 	void ReadUV(FbxMesh * pMesh, int inCtrlPointIndex, int inTextureUVIndex, int inUVLayer, DirectX::XMFLOAT2 & outUV);
 
