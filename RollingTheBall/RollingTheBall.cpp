@@ -944,6 +944,7 @@ void RollingTheBall::BuildShadersAndInputLayout()
 	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "VS", "vs_5_1");
 	mShaders["skinnedVS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", skinnedDefines, "VS", "vs_5_1");
 	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "PS", "ps_5_1");
+	mShaders["skinnedPS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", skinnedDefines, "PS", "ps_5_1");
 
 	mInputLayout =
 	{
@@ -1252,8 +1253,10 @@ void RollingTheBall::BuildPSOs()
 	};
 	skinnedOpaquePsoDesc.PS =
 	{
-		reinterpret_cast<BYTE*>(mShaders["opaquePS"]->GetBufferPointer()),
-		mShaders["opaquePS"]->GetBufferSize()
+		/*reinterpret_cast<BYTE*>(mShaders["opaquePS"]->GetBufferPointer()),
+		mShaders["opaquePS"]->GetBufferSize()*/
+		reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
+		mShaders["skinnedPS"]->GetBufferSize()
 	};
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
 

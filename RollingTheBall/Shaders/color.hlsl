@@ -21,6 +21,9 @@ struct VertexOut
 	float3 PosW    : POSITION;
 	float3 NormalW : NORMAL;
 	float2 TexC    : TEXCOORD;
+#ifdef SKINNED
+	uint4 BoneIndices : BONEINDICES;
+#endif
 };
 
 VertexOut VS(VertexIn vin)
@@ -28,24 +31,26 @@ VertexOut VS(VertexIn vin)
 	VertexOut vout = (VertexOut)0.0f;
 
 #ifdef SKINNED
-	float weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	weights[0] = vin.BoneWeights.x;
-	weights[1] = vin.BoneWeights.y;
-	weights[2] = vin.BoneWeights.z;
-	weights[3] = 1.0f - weights[0] - weights[1] - weights[2];
+// 	float weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+// 	weights[0] = vin.BoneWeights.x;
+// 	weights[1] = vin.BoneWeights.y;
+// 	weights[2] = vin.BoneWeights.z;
+// 	weights[3] = 1.0f - weights[0] - weights[1] - weights[2];
 
-	float3 posL = float3(0.0f, 0.0f, 0.0f);
-	float3 normalL = float3(0.0f, 0.0f, 0.0f);
-	for (int i = 0; i < 4; ++i)
-	{
-		// Assume no nonuniform scaling when transforming normals, so 
-		// that we do not have to use the inverse-transpose.
-		posL += weights[i] * mul(float4(vin.PosL, 1.0f), gBoneTransforms[vin.BoneIndices[i]]).xyz;
-		normalL += weights[i] * mul(vin.NormalL, (float3x3)gBoneTransforms[vin.BoneIndices[i]]);
-	}
+// 	float3 posL = float3(0.0f, 0.0f, 0.0f);
+// 	float3 normalL = float3(0.0f, 0.0f, 0.0f);
+// 	for (int i = 0; i < 4; ++i)
+// 	{
+// 		// Assume no nonuniform scaling when transforming normals, so 
+// 		// that we do not have to use the inverse-transpose.
+// 		posL += weights[i] * mul(float4(vin.PosL, 1.0f), gBoneTransforms[vin.BoneIndices[i]]).xyz;
+// 		normalL += weights[i] * mul(vin.NormalL, (float3x3)gBoneTransforms[vin.BoneIndices[i]]);
+// 	}
 
-	vin.PosL = posL;
-	vin.NormalL = normalL;
+// 	vin.PosL = posL;
+// 	vin.NormalL = normalL;
+
+	vout.BoneIndices = vin.BoneIndices;
 #endif
 
 	// Transform to world space.
@@ -62,6 +67,7 @@ VertexOut VS(VertexIn vin)
 	float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
 	vout.TexC = mul(texC, gMatTransform).xy;
 
+
 	return vout;
 }
 
@@ -69,6 +75,9 @@ float4 PS(VertexOut pin) : SV_Target
 {
 	float4 diffuseAlbedo = gDiffuseMap.Sample(gsamAnisotropicWrap, pin.TexC) * gDiffuseAlbedo;
 
+#ifdef SKINNED
+	diffuseAlbedo = float4(pin.BoneIndices.x, pin.BoneIndices.y, pin.BoneIndices.z, pin.BoneIndices.w);
+#endif
 	// Interpolating normal can unnormalize it, so renormalize it.
 	pin.NormalW = normalize(pin.NormalW);
 
