@@ -219,7 +219,7 @@ private:
 	* mouse left click - EyeTarget Move
 	* mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
 	*/
-	const float mCameraRadius = 20.0f;
+	const float mCameraRadius = 500.0f;
 	float mCameraPhi = XM_PIDIV2;
 	float mCameraTheta = 0.0f;
 

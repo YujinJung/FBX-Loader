@@ -167,7 +167,6 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 				for (int j = 0; j < 4; ++j)
 				{
 					boneOffset.m[i][j] = globalBindposeInverseMatrix.Get(i, j);
-					//boneOffset.m[i][j] = globalBindposeInverseMatrix.Get(i, j);
 				}
 			}
 			mBoneOffsets[currJointIndex] = boneOffset;
@@ -191,21 +190,24 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			FbxTime start = takeInfo->mLocalTimeSpan.GetStart();
 			FbxTime end = takeInfo->mLocalTimeSpan.GetStop();
 
-			for (FbxLongLong i = start.GetFrameCount(FbxTime::eFrames24); i <= end.GetFrameCount(FbxTime::eFrames24); ++i)
+			for (FbxLongLong i = start.GetFrameCount(FbxTime::eFrames60); i <= end.GetFrameCount(FbxTime::eFrames60); ++i)
 			{
 				FbxTime currTime;
-				currTime.SetFrame(i, FbxTime::eFrames24);
+				currTime.SetFrame(i, FbxTime::eFrames60);
 
 				Keyframe key;
-				key.TimePos = (float)i / 24.0f;
-				FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateLocalTransform(currTime) * geometryTransform;
-				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateLocalTransform(currTime);
+				key.TimePos = (float)i / 12.0f;
+				/*FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateLocalTransform(currTime) * geometryTransform;
+				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateLocalTransform(currTime);*/
 
-				/*FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateGlobalTransform(currTime) * geometryTransform;
-				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateGlobalTransform(currTime);*/
+				//FbxAMatrix currentTransformOffset = pFbxChildNode>EvaluateGlobalTransform(currTime);-
+				//FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateGlobalTransform(currTime);
+				FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateGlobalTransform(currTime);
+				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateGlobalTransform(currTime);
+
 				key.Translation = { (float)temp.GetT().mData[0],  (float)temp.GetT().mData[1],  (float)temp.GetT().mData[2] };
-				key.RotationQuat = { (float)temp.GetQ().mData[0],  (float)temp.GetQ().mData[1],  (float)temp.GetQ().mData[2] , (float)temp.GetQ().mData[3] };
 				key.Scale = { (float)temp.GetS().mData[0],  (float)temp.GetS().mData[1],  (float)temp.GetS().mData[2] };
+				key.RotationQuat = { (float)temp.GetQ().mData[0],  (float)temp.GetQ().mData[1],  (float)temp.GetQ().mData[2] , (float)temp.GetQ().mData[3] };
 
 				boneAnim.Keyframes.push_back(key);
 			}
