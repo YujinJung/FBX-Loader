@@ -134,13 +134,31 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 	/*std::vector<BoneIndexAndWeight> vBoneIndexAndWeight;
 	vBoneIndexAndWeight.resize(outVertexVector.size());*/
 
+	// Initialize BoneAnimations
+	animation.BoneAnimations.resize(boneName.size());
+	for (int i = 0; i < boneName.size(); ++i)
+	{
+		BoneAnimation initBoneAnim;
+		for (int i = 0; i < 59; ++i) // 60 frames
+		{
+			Keyframe key;
+
+			key.TimePos = (float)i / 24.0f;
+			key.Translation = { 0.0f, 0.0f, 0.0f };
+			key.Scale = { 1.0f, 1.0f, 1.0f };
+			key.RotationQuat = { 0.0f, 0.0f, 0.0f, 0.0f };
+			initBoneAnim.Keyframes.push_back(key);
+		}
+		animation.BoneAnimations[i] = initBoneAnim;
+	}
+
 	/// Deformer - Cluster - Link
 	// Deformer
 	for (uint32_t deformerIndex = 0; deformerIndex < pMesh->GetDeformerCount(); ++deformerIndex)
 	{
 		FbxSkin* pCurrSkin = reinterpret_cast<FbxSkin*>(pMesh->GetDeformer(deformerIndex, FbxDeformer::eSkin));
 		if (!pCurrSkin) { continue; }
-
+		
 		// Cluster
 		for (uint32_t clusterIndex = 0; clusterIndex < pCurrSkin->GetClusterCount(); ++clusterIndex)
 		{
@@ -161,6 +179,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 					break;
 			}
 
+			// Set the BoneOffset Matrix
 			DirectX::XMFLOAT4X4 boneOffset;
 			for (int i = 0; i < 4; ++i)
 			{
@@ -171,24 +190,29 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			}
 			mBoneOffsets[currJointIndex] = boneOffset;
 
+			// Set the Bone index and weight ./ Max 4
+			auto controlPointIndices =  pCurrCluster->GetControlPointIndices();
 			for (uint32_t i = 0; i < pCurrCluster->GetControlPointIndicesCount(); ++i)
 			{
 				BoneIndexAndWeight currBoneIndexAndWeight;
 				currBoneIndexAndWeight.vBoneIndices = currJointIndex;
 				currBoneIndexAndWeight.vBoneWeight = pCurrCluster->GetControlPointWeights()[i];
 
-				mControlPoints[pCurrCluster->GetControlPointIndices()[i]]->mBoneInfo.push_back(currBoneIndexAndWeight);
+				mControlPoints[controlPointIndices[i]]->mBoneInfo.push_back(currBoneIndexAndWeight);
 			}
-
+			
+			// Set the Bone Animation Matrix
 			BoneAnimation boneAnim;
 
 			FbxAnimStack* pCurrAnimStack = pFbxScene->GetSrcObject<FbxAnimStack>(0);
 			FbxString currAnimStackName = pCurrAnimStack->GetName();
 			animationName = currAnimStackName.Buffer();
 
+			FbxAnimEvaluator* pSceneEvaluator = pFbxScene->GetAnimationEvaluator();
+
 			FbxTakeInfo* takeInfo = pFbxScene->GetTakeInfo(currAnimStackName);
-			FbxTime start = takeInfo->mLocalTimeSpan.GetStart();
-			FbxTime end = takeInfo->mLocalTimeSpan.GetStop();
+			FbxTime start = takeInfo->mReferenceTimeSpan.GetStart();
+			FbxTime end = takeInfo->mReferenceTimeSpan.GetStop();
 
 			for (FbxLongLong i = start.GetFrameCount(FbxTime::eFrames60); i <= end.GetFrameCount(FbxTime::eFrames60); ++i)
 			{
@@ -196,23 +220,26 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 				currTime.SetFrame(i, FbxTime::eFrames60);
 
 				Keyframe key;
-				key.TimePos = (float)i / 12.0f;
+				key.TimePos = (float)i / 24.0f;
 				/*FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateLocalTransform(currTime) * geometryTransform;
 				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateLocalTransform(currTime);*/
 
-				//FbxAMatrix currentTransformOffset = pFbxChildNode>EvaluateGlobalTransform(currTime);-
+				//FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateGlobalTransform(currTime) * geometryTransform;
 				//FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateGlobalTransform(currTime);
-				FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateGlobalTransform(currTime);
-				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateGlobalTransform(currTime);
+				FbxAMatrix currentTransformOffset = pSceneEvaluator->GetNodeGlobalTransform(pFbxChildNode, currTime) * geometryTransform;
+				FbxAMatrix temp = currentTransformOffset.Inverse() * pSceneEvaluator->GetNodeGlobalTransform(pCurrCluster->GetLink(), currTime);
 
-				key.Translation = { (float)temp.GetT().mData[0],  (float)temp.GetT().mData[1],  (float)temp.GetT().mData[2] };
-				key.Scale = { (float)temp.GetS().mData[0],  (float)temp.GetS().mData[1],  (float)temp.GetS().mData[2] };
-				key.RotationQuat = { (float)temp.GetQ().mData[0],  (float)temp.GetQ().mData[1],  (float)temp.GetQ().mData[2] , (float)temp.GetQ().mData[3] };
+				FbxVector4 TS = temp.GetT();
+				key.Translation = { (float)TS.mData[0],  (float)TS.mData[1],  (float)TS.mData[2] };
+				TS = temp.GetS();
+				key.Scale = { (float)TS.mData[0],  (float)TS.mData[1],  (float)TS.mData[2] };
+				FbxQuaternion Q = temp.GetQ();
+				key.RotationQuat = { (float)Q.mData[0],  (float)Q.mData[1],  (float)Q.mData[2] , (float)Q.mData[3] };
 
 				boneAnim.Keyframes.push_back(key);
 			}
 
-			animation.BoneAnimations.push_back(boneAnim);
+			animation.BoneAnimations[currJointIndex] = boneAnim;
 		}
 	}
 
