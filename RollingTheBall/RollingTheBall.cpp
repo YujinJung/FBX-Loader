@@ -178,9 +178,9 @@ void RollingTheBall::Draw(const GameTimer& gt)
 	}
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
 
-	mCommandList->OMSetStencilRef(0);
+	/*mCommandList->OMSetStencilRef(0);
 	mCommandList->SetPipelineState(mPSOs["shadow"].Get());
-	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Shadow]);
+	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Shadow]);*/
 
 	// Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -362,7 +362,7 @@ void RollingTheBall::OnKeyboardInput(const GameTimer& gt)
 	mPlayer.setVelocity(mPlayerVelocity);
 	if (restart == true)
 	{
-		UpdateObjectShadows();
+		//UpdateObjectShadows();
 	}
 	if (pushKey == true)
 	{
@@ -433,13 +433,13 @@ void RollingTheBall::UpdatePlayerPosition(const GameTimer& gt)
 			mPlayerRoll -= XM_2PI;
 		else if (mPlayerRoll < -XM_PI)
 			mPlayerRoll += XM_2PI;
-		world = XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixRotationX(mPlayerRoll) * XMMatrixRotationY(mPlayerYaw) * XMMatrixTranslationFromVector(PlayerPos);
+		world = XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixRotationY(mPlayerYaw) * XMMatrixTranslationFromVector(PlayerPos);
 
 		// Distance between player and target 
 		mDistanceToTarget = MathHelper::getDistance(PlayerPos, XMVectorSet(mTargetPos.x, mTargetPos.y, mTargetPos.z, 1.0f));
 
 		// Update Shadow
-		UpdatePlayerShadow(gt);
+		//UpdatePlayerShadow(gt);
 
 		prePlayerVelocity = mPlayerVelocity;
 	}
@@ -460,7 +460,7 @@ void RollingTheBall::UpdatePlayerPosition(const GameTimer& gt)
 
 void RollingTheBall::UpdatePlayerShadow(const GameTimer& gt)
 {
-	XMFLOAT3 mPlayerPos = mPlayer.getPos();
+	/*XMFLOAT3 mPlayerPos = mPlayer.getPos();
 	XMMATRIX playerWorld = XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixTranslation(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z);
 
 	XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -468,15 +468,15 @@ void RollingTheBall::UpdatePlayerShadow(const GameTimer& gt)
 	XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
 	XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
 	XMStoreFloat4x4(&mShadowedPlayerRitem->World, playerWorld * S * shadowOffsetY);
-	mShadowedPlayerRitem->NumFramesDirty = gNumFrameResources;
+	mShadowedPlayerRitem->NumFramesDirty = gNumFrameResources;*/
 }
 
 void RollingTheBall::UpdateCamera(const GameTimer& gt)
 {
 	// Build the view matrix.
-	XMVECTOR pos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
-	XMVECTOR target = XMVectorSet(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z, 0.0f);
-	XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	XMVECTOR pos = XMLoadFloat3(&mEyePos);
+	XMVECTOR target = XMLoadFloat3(&mEyeTarget);
+	XMVECTOR up= XMLoadFloat3(&mEyeUp);
 
 	XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
 	XMStoreFloat4x4(&mView, view);
@@ -490,52 +490,13 @@ void RollingTheBall::UpdateObjectCBs(const GameTimer& gt)
 
 	auto currObjectCB = mCurrFrameResource->ObjectCB.get();
 
-	for (auto& e : mRitems[(int)RenderLayer::Opaque])
+	for (auto& e : mAllRitems)
 	{
 		// Only update the cbuffer data if the constants have changed.  
 		// This needs to be tracked per frame resource.
 		XMMATRIX world = XMLoadFloat4x4(&e->World);
 		XMMATRIX texTransform = XMLoadFloat4x4(&e->TexTransform);
 
-		// Target Circle
-		if (e->ObjCBIndex >= mTargetIndexOffset)
-		{
-			world *= XMMatrixTranslation(mTargetPos.x, 0.0f, 0.0f);
-
-			if (e->ObjCBIndex < mTargetIndexEndOffset)
-			{
-				// Outer Circle -> Inner Circle
-				// Distinguish based on 'y' coord 
-				if (mDistanceToTarget < mTargetRadius[0])
-				{
-					e->Mat = mMaterials["bricks3"].get();
-				}
-				else if (mDistanceToTarget < mTargetRadius[1])
-				{
-					if (e->World.m[3][1] >= 1.1f)
-						e->Mat = mMaterials["bricks3"].get();
-					else
-						e->Mat = mMaterials["stone0"].get();
-				}
-				else if (mDistanceToTarget < mTargetRadius[2])
-				{
-					if (e->World.m[3][1] == 1.2f)
-						e->Mat = mMaterials["bricks3"].get();
-					else
-						e->Mat = mMaterials["stone0"].get();
-				}
-				else
-				{
-					e->Mat = mMaterials["stone0"].get();
-				}
-			}
-			ObjectConstants objConstants;
-			XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
-			XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
-
-			currObjectCB->CopyData(e->ObjCBIndex, objConstants);
-		}
-
 		if (e->NumFramesDirty > 0)
 		{
 			ObjectConstants objConstants;
@@ -549,46 +510,28 @@ void RollingTheBall::UpdateObjectCBs(const GameTimer& gt)
 		}
 	}
 
-	for (auto& e : mRitems[(int)RenderLayer::Shadow])
-	{
-		if (e->NumFramesDirty > 0)
-		{
-			XMMATRIX world = XMLoadFloat4x4(&e->World);
-			XMMATRIX texTransform = XMLoadFloat4x4(&e->TexTransform);
+	//for (auto& e : mRitems[(int)RenderLayer::Shadow])
+	//{
+	//	if (e->NumFramesDirty > 0)
+	//	{
+	//		XMMATRIX world = XMLoadFloat4x4(&e->World);
+	//		XMMATRIX texTransform = XMLoadFloat4x4(&e->TexTransform);
 
-			ObjectConstants objConstants;
-			XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
-			XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
+	//		ObjectConstants objConstants;
+	//		XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
+	//		XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
 
-			currObjectCB->CopyData(e->ObjCBIndex, objConstants);
+	//		currObjectCB->CopyData(e->ObjCBIndex, objConstants);
 
-			// Next FrameResource need to be updated too.
-			e->NumFramesDirty--;
-		}
-	}
+	//		// Next FrameResource need to be updated too.
+	//		e->NumFramesDirty--;
+	//	}
+	//}
 }
 
 void RollingTheBall::UpdateObjectShadows()
 {
-	// for (auto& e : mRitems[(int)RenderLayer::Shadow])
-	// 3 means Player, player shadow, grid 
-	for (int i = mTargetIndexOffset - 3; i < mTargetIndexEndOffset - 3; ++i)
-	{
-		auto& e = mRitems[(int)RenderLayer::Shadow][i];
-
-		// Load the object world
-		auto& o = mRitems[(int)RenderLayer::Opaque][i + 1];
-		XMMATRIX shadowWorld = XMLoadFloat4x4(&o->World);
-
-		shadowWorld *= XMMatrixTranslation(mTargetPos.x, 0.0f, 0.0f);
-
-		XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-		XMVECTOR toMainLight = -XMLoadFloat3(&mMainLight.Direction);
-		XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
-		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
-		XMStoreFloat4x4(&e->World, shadowWorld * S * shadowOffsetY);
-		e->NumFramesDirty = gNumFrameResources;
-	}
+	
 }
 
 void RollingTheBall::UpdateMainPassCB(const GameTimer& gt)
@@ -734,7 +677,7 @@ void RollingTheBall::LoadTextures()
 void RollingTheBall::BuildDescriptorHeaps()
 {
 	mObjCbvOffset = (UINT)mTextures.size();
-	UINT objCount = (UINT)mRitems[(int)RenderLayer::Opaque].size() + (UINT)mRitems[(int)RenderLayer::Shadow].size();
+	UINT objCount = (UINT)mAllRitems.size();
 	UINT matCount = (UINT)mMaterials.size();
 	UINT skinCount = (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size();
 
@@ -807,7 +750,7 @@ void RollingTheBall::BuildTextureBufferViews()
 void RollingTheBall::BuildConstantBufferViews()
 {
 	UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
-	UINT objCount = (UINT)mRitems[(int)RenderLayer::Opaque].size() + (UINT)mRitems[(int)RenderLayer::Shadow].size();
+	UINT objCount = (UINT)mAllRitems.size();
 
 	// Need a CBV descriptor for each object for each frame resource.
 	for (int frameIndex = 0; frameIndex < gNumFrameResources; ++frameIndex)
@@ -1358,7 +1301,8 @@ void RollingTheBall::BuildFrameResources()
 
 void RollingTheBall::BuildRenderItems()
 {
-	UINT objCBIndex = 2;
+	UINT objCBIndex = 0;
+
 	auto gridRitem = std::make_unique<RenderItem>();
 	XMStoreFloat4x4(&gridRitem->World, XMMatrixScaling(2.0f, 1.0f, 10.0f));
 	XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(8.0f, 80.0f, 1.0f));
@@ -1369,194 +1313,14 @@ void RollingTheBall::BuildRenderItems()
 	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
 	gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
 	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
+	mRitems[(int)RenderLayer::Opaque].push_back(gridRitem.get());
 	mAllRitems.push_back(std::move(gridRitem));
 
-
-	XMMATRIX brickTexTransform = XMMatrixScaling(1.0f, 1.0f, 1.0f);
-	for (int i = 0; i < 15; ++i)
-	{
-		auto leftCylRitem = std::make_unique<RenderItem>();
-		auto rightCylRitem = std::make_unique<RenderItem>();
-		auto leftSphereRitem = std::make_unique<RenderItem>();
-		auto rightSphereRitem = std::make_unique<RenderItem>();
-
-		auto leftColSphere = std::make_unique<CollisionSphere>();
-		auto rightColSphere = std::make_unique<CollisionSphere>();
-
-		XMMATRIX leftCylWorld = XMMatrixTranslation(-15.0f, 1.5f, 20.0f + i * 5.0f);
-		XMMATRIX rightCylWorld = XMMatrixTranslation(+15.0f, 1.5f, 20.0f + i * 5.0f);
-
-		XMMATRIX leftSphereWorld = XMMatrixTranslation(-15.0f, 3.5f, 20.0f + i * 5.0f);
-		XMMATRIX rightSphereWorld = XMMatrixTranslation(+15.0f, 3.5f, 20.0f + i * 5.0f);
-
-		XMStoreFloat4x4(&leftCylRitem->World, rightCylWorld);
-		XMStoreFloat4x4(&leftCylRitem->TexTransform, brickTexTransform);
-		leftCylRitem->ObjCBIndex = objCBIndex++;
-		leftCylRitem->Geo = mGeometries["shapeGeo"].get();
-		leftCylRitem->Mat = mMaterials["bricks0"].get();
-		leftCylRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		leftCylRitem->IndexCount = leftCylRitem->Geo->DrawArgs["cylinder"].IndexCount;
-		leftCylRitem->StartIndexLocation = leftCylRitem->Geo->DrawArgs["cylinder"].StartIndexLocation;
-		leftCylRitem->BaseVertexLocation = leftCylRitem->Geo->DrawArgs["cylinder"].BaseVertexLocation;
-
-		leftColSphere->radius = 1.5f;
-		leftColSphere->originVector = { -15.0f, 2.0f, 20.0f + i * 5.0f };
-
-		XMStoreFloat4x4(&rightCylRitem->World, leftCylWorld);
-		XMStoreFloat4x4(&rightCylRitem->TexTransform, brickTexTransform);
-		rightCylRitem->ObjCBIndex = objCBIndex++;
-		rightCylRitem->Geo = mGeometries["shapeGeo"].get();
-		rightCylRitem->Mat = mMaterials["bricks0"].get();
-		rightCylRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		rightCylRitem->IndexCount = rightCylRitem->Geo->DrawArgs["cylinder"].IndexCount;
-		rightCylRitem->StartIndexLocation = rightCylRitem->Geo->DrawArgs["cylinder"].StartIndexLocation;
-		rightCylRitem->BaseVertexLocation = rightCylRitem->Geo->DrawArgs["cylinder"].BaseVertexLocation;
-
-		rightColSphere->radius = 1.5f;
-		rightColSphere->originVector = { +15.0f, 2.0f, 20.0f + i * 5.0f };
-
-		XMStoreFloat4x4(&leftSphereRitem->World, leftSphereWorld);
-		leftSphereRitem->TexTransform = MathHelper::Identity4x4();
-		leftSphereRitem->ObjCBIndex = objCBIndex++;
-		leftSphereRitem->Geo = mGeometries["shapeGeo"].get();
-		leftSphereRitem->Mat = mMaterials["stone0"].get();
-		leftSphereRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		leftSphereRitem->IndexCount = leftSphereRitem->Geo->DrawArgs["sphere"].IndexCount;
-		leftSphereRitem->StartIndexLocation = leftSphereRitem->Geo->DrawArgs["sphere"].StartIndexLocation;
-		leftSphereRitem->BaseVertexLocation = leftSphereRitem->Geo->DrawArgs["sphere"].BaseVertexLocation;
-
-		XMStoreFloat4x4(&rightSphereRitem->World, rightSphereWorld);
-		rightSphereRitem->TexTransform = MathHelper::Identity4x4();
-		rightSphereRitem->ObjCBIndex = objCBIndex++;
-		rightSphereRitem->Geo = mGeometries["shapeGeo"].get();
-		rightSphereRitem->Mat = mMaterials["stone0"].get();
-		rightSphereRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		rightSphereRitem->IndexCount = rightSphereRitem->Geo->DrawArgs["sphere"].IndexCount;
-		rightSphereRitem->StartIndexLocation = rightSphereRitem->Geo->DrawArgs["sphere"].StartIndexLocation;
-		rightSphereRitem->BaseVertexLocation = rightSphereRitem->Geo->DrawArgs["sphere"].BaseVertexLocation;
-
-		mAllRitems.push_back(std::move(leftCylRitem));
-		mAllRitems.push_back(std::move(rightCylRitem));
-		mAllRitems.push_back(std::move(leftSphereRitem));
-		mAllRitems.push_back(std::move(rightSphereRitem));
-
-		mCollisionRitems.push_back(std::move(leftColSphere));
-		mCollisionRitems.push_back(std::move(rightColSphere));
-	}
-
-	for (int i = 0; i < 7; ++i)
-	{
-		auto backSphereRItem = std::make_unique<RenderItem>();
-		auto backCylRItem = std::make_unique<RenderItem>();
-
-		auto ColSphere = std::make_unique<CollisionSphere>();
-
-		XMMATRIX backSphereWorld = XMMatrixTranslation(-15.0f + i * 5.0f, 3.5f, 95.0f);
-		XMMATRIX backCylWorld = XMMatrixTranslation(-15.0f + i * 5.0f, 1.5f, 95.0f);
-
-		XMStoreFloat4x4(&backCylRItem->World, backCylWorld);
-		XMStoreFloat4x4(&backCylRItem->TexTransform, brickTexTransform);
-		backCylRItem->ObjCBIndex = objCBIndex++;
-		backCylRItem->Geo = mGeometries["shapeGeo"].get();
-		backCylRItem->Mat = mMaterials["bricks0"].get();
-		backCylRItem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		backCylRItem->IndexCount = backCylRItem->Geo->DrawArgs["cylinder"].IndexCount;
-		backCylRItem->StartIndexLocation = backCylRItem->Geo->DrawArgs["cylinder"].StartIndexLocation;
-		backCylRItem->BaseVertexLocation = backCylRItem->Geo->DrawArgs["cylinder"].BaseVertexLocation;
-
-		XMStoreFloat4x4(&backSphereRItem->World, backSphereWorld);
-		backSphereRItem->TexTransform = MathHelper::Identity4x4();
-		backSphereRItem->ObjCBIndex = objCBIndex++;
-		backSphereRItem->Geo = mGeometries["shapeGeo"].get();
-		backSphereRItem->Mat = mMaterials["stone0"].get();
-		backSphereRItem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		backSphereRItem->IndexCount = backSphereRItem->Geo->DrawArgs["sphere"].IndexCount;
-		backSphereRItem->StartIndexLocation = backSphereRItem->Geo->DrawArgs["sphere"].StartIndexLocation;
-		backSphereRItem->BaseVertexLocation = backSphereRItem->Geo->DrawArgs["sphere"].BaseVertexLocation;
-
-		ColSphere->radius = 1.5f;
-		ColSphere->originVector = { -15.0f + i * 5.0f, 2.0f, 95.0f };
-
-		mAllRitems.push_back(std::move(backCylRItem));
-		mAllRitems.push_back(std::move(backSphereRItem));
-
-		mCollisionRitems.push_back(std::move(ColSphere));
-	}
-
-	mTargetIndexOffset = objCBIndex;
-	for (int i = 0; i < 12; ++i)
-	{
-		auto circle1Item = std::make_unique<RenderItem>();
-		auto circle2Item = std::make_unique<RenderItem>();
-		auto circle3Item = std::make_unique<RenderItem>();
-
-		float theta = XM_2PI / 12 * i;
-		XMMATRIX circle1 = XMMatrixTranslation(mTargetPos.x + mTargetRadius[0] * cosf(theta), 1.0f, mTargetPos.z + mTargetRadius[0] * sinf(theta));
-		XMMATRIX circle2 = XMMatrixTranslation(mTargetPos.x + mTargetRadius[1] * cosf(theta), 1.1f, mTargetPos.z + mTargetRadius[1] * sinf(theta));
-		XMMATRIX circle3 = XMMatrixTranslation(mTargetPos.x + mTargetRadius[2] * cosf(theta), 1.2f, mTargetPos.z + mTargetRadius[2] * sinf(theta));
-
-		XMStoreFloat4x4(&circle1Item->World, circle1);
-		circle1Item->TexTransform = MathHelper::Identity4x4();
-		circle1Item->ObjCBIndex = objCBIndex++;
-		circle1Item->Geo = mGeometries["shapeGeo"].get();
-		circle1Item->Mat = mMaterials["stone0"].get();
-		circle1Item->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		circle1Item->IndexCount = circle1Item->Geo->DrawArgs["sphere"].IndexCount;
-		circle1Item->StartIndexLocation = circle1Item->Geo->DrawArgs["sphere"].StartIndexLocation;
-		circle1Item->BaseVertexLocation = circle1Item->Geo->DrawArgs["sphere"].BaseVertexLocation;
-
-		XMStoreFloat4x4(&circle2Item->World, circle2);
-		circle2Item->TexTransform = MathHelper::Identity4x4();
-		circle2Item->ObjCBIndex = objCBIndex++;
-		circle2Item->Geo = mGeometries["shapeGeo"].get();
-		circle2Item->Mat = mMaterials["stone0"].get();
-		circle2Item->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		circle2Item->IndexCount = circle2Item->Geo->DrawArgs["sphere"].IndexCount;
-		circle2Item->StartIndexLocation = circle2Item->Geo->DrawArgs["sphere"].StartIndexLocation;
-		circle2Item->BaseVertexLocation = circle2Item->Geo->DrawArgs["sphere"].BaseVertexLocation;
-
-		XMStoreFloat4x4(&circle3Item->World, circle3);
-		circle3Item->TexTransform = MathHelper::Identity4x4();
-		circle3Item->ObjCBIndex = objCBIndex++;
-		circle3Item->Geo = mGeometries["shapeGeo"].get();
-		circle3Item->Mat = mMaterials["stone0"].get();
-		circle3Item->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		circle3Item->IndexCount = circle1Item->Geo->DrawArgs["sphere"].IndexCount;
-		circle3Item->StartIndexLocation = circle1Item->Geo->DrawArgs["sphere"].StartIndexLocation;
-		circle3Item->BaseVertexLocation = circle1Item->Geo->DrawArgs["sphere"].BaseVertexLocation;
-
-		mAllRitems.push_back(std::move(circle1Item));
-		mAllRitems.push_back(std::move(circle2Item));
-		mAllRitems.push_back(std::move(circle3Item));
-	}
-	mTargetIndexEndOffset = objCBIndex;
-	// All the render items are opaque.
-	// playerRitem / shadowedPlayerRitem (2) SUBTRACT 
-	UINT endIndex = objCBIndex - 2;
-	//for (auto& e : mAllRitems)
-	for (int i = 0; i < endIndex; ++i)
-	{
-		auto& e = mAllRitems.at(i);
-		mRitems[(int)RenderLayer::Opaque].push_back(e.get());
-
-		// Skip the Grid shadow
-		if (i == 0) continue;
-
-		auto shadowedObjectRitem = std::make_unique<RenderItem>();
-		*shadowedObjectRitem = *e;
-		shadowedObjectRitem->ObjCBIndex = objCBIndex++;
-		shadowedObjectRitem->Mat = mMaterials["shadow0"].get();
-		shadowedObjectRitem->NumFramesDirty = gNumFrameResources;
-		mRitems[(int)RenderLayer::Shadow].push_back(shadowedObjectRitem.get());
-		mAllRitems.push_back(std::move(shadowedObjectRitem));
-	}
-
-	//
 	// Player
 	auto playerRitem = std::make_unique<RenderItem>();
 	XMStoreFloat4x4(&playerRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f)*XMMatrixTranslation(0.0f, 2.0f, 0.0f));
 	XMStoreFloat4x4(&playerRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
-	playerRitem->ObjCBIndex = 0;
+	playerRitem->ObjCBIndex = objCBIndex++;
 	playerRitem->Mat = mMaterials["tile0"].get();
 	playerRitem->Geo = mGeometries["shapeGeo"].get();
 	playerRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1566,65 +1330,20 @@ void RollingTheBall::BuildRenderItems()
 	mPlayerRitem = playerRitem.get();
 	mPlayerRitem->NumFramesDirty = gNumFrameResources;
 	mRitems[(int)RenderLayer::Opaque].push_back(playerRitem.get());
-
-	// Player's shadow Render item
-	auto shadowedPlayerRitem = std::make_unique<RenderItem>();
-	*shadowedPlayerRitem = *playerRitem;
-	shadowedPlayerRitem->ObjCBIndex = 1;
-	shadowedPlayerRitem->Mat = mMaterials["shadow0"].get();
-	mShadowedPlayerRitem = shadowedPlayerRitem.get();
-	mShadowedPlayerRitem->NumFramesDirty = gNumFrameResources;
-	mRitems[(int)RenderLayer::Shadow].push_back(shadowedPlayerRitem.get());
-
 	mAllRitems.push_back(std::move(playerRitem));
-	mAllRitems.push_back(std::move(shadowedPlayerRitem));
 
-	/*for (UINT i = 0; i < mSkinnedMats.size(); ++i)
-	{
-	std::string submeshName = "sm_" + std::to_string(i);
-
-	auto ritem = std::make_unique<RenderItem>();
-
-	// Reflect to change coordinate system from the RHS the data was exported out as.
-	XMMATRIX modelScale = XMMatrixScaling(0.05f, 0.05f, -0.05f);
-	XMMATRIX modelRot = XMMatrixRotationY(MathHelper::Pi);
-	XMMATRIX modelOffset = XMMatrixTranslation(0.0f, 0.0f, -5.0f);
-	XMStoreFloat4x4(&ritem->World, modelScale*modelRot*modelOffset);
-
-	ritem->TexTransform = MathHelper::Identity4x4();
-	ritem->ObjCBIndex = objCBIndex++;
-	ritem->Mat = mMaterials[mSkinnedMats[i].Name].get();
-	ritem->Geo = mGeometries[mSkinnedModelFilename].get();
-	ritem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	ritem->IndexCount = ritem->Geo->DrawArgs[submeshName].IndexCount;
-	ritem->StartIndexLocation = ritem->Geo->DrawArgs[submeshName].StartIndexLocation;
-	ritem->BaseVertexLocation = ritem->Geo->DrawArgs[submeshName].BaseVertexLocation;
-
-	// All render items for this solider.m3d instance share
-	// the same skinned model instance.
-	ritem->SkinnedCBIndex = 0;
-	ritem->SkinnedModelInst = mSkinnedModelInst.get();
-
-	mRitemLayer[(int)RenderLayer::SkinnedOpaque].push_back(ritem.get());
-	mAllRitems.push_back(std::move(ritem));
-	}*/
-
-	BuildFbx(objCBIndex);
-}
-
-void RollingTheBall::BuildFbx(UINT objCBIndex)
-{
 	auto FbxRitem = std::make_unique<RenderItem>();
 	// Line
 	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
 	// Cone
 	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
 	//Tank because of size
-	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+	//XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
 	//XMStoreFloat4x4(&FbxRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	//XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
-
-	FbxRitem->ObjCBIndex = objCBIndex;
+	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f)*XMMatrixTranslation(0.0f, 2.0f, 0.0f));
+	FbxRitem->TexTransform = MathHelper::Identity4x4();
+	FbxRitem->ObjCBIndex = objCBIndex++;
 	FbxRitem->Mat = mMaterials["tile0"].get();
 	FbxRitem->Geo = mGeometries["FbxGeo"].get();
 	FbxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1639,9 +1358,14 @@ void RollingTheBall::BuildFbx(UINT objCBIndex)
 	mAllRitems.push_back(std::move(FbxRitem));
 }
 
+void RollingTheBall::BuildFbx(UINT objCBIndex)
+{
+	
+}
+
 void RollingTheBall::BuildObjectShadows()
 {
-	for (auto& e : mRitems[(int)RenderLayer::Shadow])
+	/*for (auto& e : mRitems[(int)RenderLayer::Shadow])
 	{
 		XMMATRIX world = XMLoadFloat4x4(&e->World);
 
@@ -1651,20 +1375,11 @@ void RollingTheBall::BuildObjectShadows()
 		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
 		XMStoreFloat4x4(&e->World, world * S * shadowOffsetY);
 		e->NumFramesDirty = gNumFrameResources;
-	}
+	}*/
 }
 //-------------------------------------------------------------------------------------------------------------------------------
 void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
-	/*UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
-	UINT matCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(MaterialConstants));
-	UINT skinnedCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(SkinnedConstants)); */
-	/*auto objectCB = mCurrFrameResource->ObjectCB->Resource();
-	auto matCB = mCurrFrameResource->MaterialCB->Resource();
-	auto skinnedCB = mCurrFrameResource->SkinnedCB->Resource();*/
-
-	if (ritems[0]->SkinnedCBIndex == -1)
-	{
 		// For each render item...
 		for (size_t i = 0; i < ritems.size(); ++i)
 		{
@@ -1680,7 +1395,7 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 			CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 			tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
 
-			UINT cbvIndex = mObjCbvOffset + mCurrFrameResourceIndex * ((UINT)mRitems[(int)RenderLayer::Opaque].size() + (UINT)mRitems[(int)RenderLayer::Shadow].size()) + ri->ObjCBIndex;
+			UINT cbvIndex = mObjCbvOffset + mCurrFrameResourceIndex * (UINT)mAllRitems.size() + ri->ObjCBIndex;
 			auto cbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 			cbvHandle.Offset(cbvIndex, mCbvSrvDescriptorSize);
 
@@ -1692,28 +1407,17 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 			cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
 			cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
 
+			UINT skinnedIndex = mSkinCbvOffset + mCurrFrameResourceIndex * (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size() + ri->SkinnedCBIndex;
+			auto skinCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+			skinCbvHandle.Offset(skinnedIndex, mCbvSrvDescriptorSize);
+
+			if (ri->SkinnedModelInst != nullptr)
+			{
+				cmdList->SetGraphicsRootDescriptorTable(4, skinCbvHandle);
+			}
+
 			cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 		}
-	}
-	else if (ritems[0]->SkinnedCBIndex == 0)
-	{
-		auto ri = ritems[0];
-
-		cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
-		cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
-		cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
-
-		UINT skinnedIndex = mSkinCbvOffset + mCurrFrameResourceIndex * (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size() + ri->SkinnedCBIndex;
-		auto skinCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-		skinCbvHandle.Offset(skinnedIndex, mCbvSrvDescriptorSize);
-
-		if (ri->SkinnedModelInst != nullptr)
-		{
-			cmdList->SetGraphicsRootDescriptorTable(4, skinCbvHandle);
-		}
-
-		cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
-	}
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------

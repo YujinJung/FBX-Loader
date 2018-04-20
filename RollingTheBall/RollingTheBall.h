@@ -209,6 +209,7 @@ private:
 	UINT mCbvSrvDescriptorSize = 0;
 
 	bool mIsWireframe = false;
+	bool mFbxWireframe = false;
 	bool attackMonster = false;
 
 	/*
@@ -219,7 +220,7 @@ private:
 	* mouse left click - EyeTarget Move
 	* mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
 	*/
-	const float mCameraRadius = 500.0f;
+	const float mCameraRadius = 20.0f;
 	float mCameraPhi = XM_PIDIV2;
 	float mCameraTheta = 0.0f;
 
@@ -228,7 +229,6 @@ private:
 	// Player Infomation and Cache render items of player
 	PlayerInfo mPlayer;
 	RenderItem* mPlayerRitem = nullptr;
-	RenderItem* mShadowedPlayerRitem = nullptr;
 
 	// Target Circle
 	const std::vector<float> mTargetRadius = { 3.0f, 8.0f, 11.0f };
@@ -237,8 +237,11 @@ private:
 	UINT mTargetIndexEndOffset = 0;
 	float mDistanceToTarget = 30.0f;
 
+	bool mViewDirty = false;
 	XMFLOAT3 mEyePos = { 0.0f, 30.0f, -30.0f };
 	XMFLOAT3 mEyeTarget = mPlayer.getPos();
+	XMFLOAT3 mEyeUp = { 0.0f, 1.0f, 0.0f };
+	XMFLOAT3 mEyeRight = { 1.0f, 0.0f, 0.0f };
 	XMFLOAT3 mEyePosCalc = { mCameraRadius * 2 * sinf(XM_PI / 3.0f), mCameraRadius * 2 * cosf(XM_PI / 3.0f), mCameraRadius * 2 * sinf(XM_PI / 3.0f) };
 
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();

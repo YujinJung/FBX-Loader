@@ -183,15 +183,13 @@ void SkinnedData::GetFinalTransforms(const std::string& clipName, float timePos,
 		XMMATRIX offset = XMLoadFloat4x4(&mBoneOffsets[i]);
 		XMMATRIX toRoot = XMLoadFloat4x4(&toParentTransforms[i]);
 		XMMATRIX finalTransform = XMMatrixMultiply(offset, toRoot);
-		//XMMATRIX finalTransform = XMMatrixMultiply(toRoot, offset);
-		//finalTransform = finalTransform * XMMatrixScaling(0.01f, 0.01f, 0.01f) * XMMatrixTranslation(0.0f, 5.0f, 0.0f);
+		finalTransform *= XMMatrixScaling(0.01f, 0.01f, 0.01f);
 
 		//printMatrix(L"Offset", i, offset);
 		//printMatrix(L"toRoot", i, toRoot);
 		//printMatrix(L"final", i, finalTransform);
 
 		XMStoreFloat4x4(&finalTransforms[i], XMMatrixTranspose(finalTransform));
-		//XMStoreFloat4x4(&finalTransforms[i], finalTransform);
 	}
 }
 
