@@ -139,8 +139,6 @@ private:
 
 	void OnKeyboardInput(const GameTimer& gt);
 
-	void UpdatePlayerPosition(const GameTimer & gt);
-	void UpdatePlayerShadow(const GameTimer & gt);
 	void UpdateCamera(const GameTimer& gt);
 	void UpdateObjectCBs(const GameTimer& gt);
 	void UpdateMainPassCB(const GameTimer& gt);
@@ -160,7 +158,6 @@ private:
 	void BuildFrameResources();
 	void UpdateObjectShadows();
 	void BuildRenderItems();
-	void BuildFbx(UINT objCBIndex);
 	void BuildObjectShadows();
 	void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
@@ -186,12 +183,7 @@ private:
 	// For FBX
 	UINT mSkinnedSrvHeapStart = 0;
 	std::unique_ptr<SkinnedModelInstance> mSkinnedModelInst;
-	std::vector<std::string> mSkinnedTextureNames;
-	std::vector<std::string> mBoneName;
 	SkinnedData mSkinnedInfo;
-	/*std::string mSkinnedModelFilename = "Models\\soldier.m3d";
-	std::vector<M3DLoader::Subset> mSkinnedSubsets;
-	std::vector<M3DLoader::M3dMaterial> mSkinnedMats;*/
 
 	// List of all the render items.
 	std::vector<std::unique_ptr<RenderItem>> mAllRitems;
@@ -210,7 +202,6 @@ private:
 
 	bool mIsWireframe = false;
 	bool mFbxWireframe = false;
-	bool attackMonster = false;
 
 	/*
 	* EyePos - EyeTarget
@@ -227,22 +218,13 @@ private:
 	Light mMainLight;
 
 	// Player Infomation and Cache render items of player
-	PlayerInfo mPlayer;
 	RenderItem* mPlayerRitem = nullptr;
-
-	// Target Circle
-	const std::vector<float> mTargetRadius = { 3.0f, 8.0f, 11.0f };
-	XMFLOAT3 mTargetPos = { 0.0f, 1.0f, 70.0f };
-	UINT mTargetIndexOffset = 0;
-	UINT mTargetIndexEndOffset = 0;
-	float mDistanceToTarget = 30.0f;
 
 	bool mViewDirty = false;
 	XMFLOAT3 mEyePos = { 0.0f, 30.0f, -30.0f };
-	XMFLOAT3 mEyeTarget = mPlayer.getPos();
+	XMFLOAT3 mEyeTarget = { 0.0f, 0.0f, 0.0f };
 	XMFLOAT3 mEyeUp = { 0.0f, 1.0f, 0.0f };
 	XMFLOAT3 mEyeRight = { 1.0f, 0.0f, 0.0f };
-	XMFLOAT3 mEyePosCalc = { mCameraRadius * 2 * sinf(XM_PI / 3.0f), mCameraRadius * 2 * cosf(XM_PI / 3.0f), mCameraRadius * 2 * sinf(XM_PI / 3.0f) };
 
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();
 	XMFLOAT4X4 mProj = MathHelper::Identity4x4();

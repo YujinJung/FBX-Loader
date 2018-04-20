@@ -1058,7 +1058,7 @@ void RollingTheBall::BuildPSOs()
 
 	// PSO for skinned
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaquePsoDesc = opaquePsoDesc;
-	skinnedOpaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	//skinnedOpaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 	skinnedOpaquePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
 	skinnedOpaquePsoDesc.VS =
 	{
@@ -1073,7 +1073,6 @@ void RollingTheBall::BuildPSOs()
 		mShaders["skinnedPS"]->GetBufferSize()
 	};
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
-
 
 	// PSO for Shadow
 	D3D12_RENDER_TARGET_BLEND_DESC shadowBlendDesc;
@@ -1188,17 +1187,12 @@ void RollingTheBall::BuildRenderItems()
 	FbxRitem->SkinnedModelInst = mSkinnedModelInst.get();
 
 	mRitems[(int)RenderLayer::SkinnedOpaque].push_back(FbxRitem.get());
-	mAllRitems.push_back(std::move(FbxRitem));
-}
-
-void RollingTheBall::BuildFbx(UINT objCBIndex)
-{
-	
+	mAllRitems.push_back(std::move(FbxRitem));	
 }
 
 void RollingTheBall::BuildObjectShadows()
 {
-	/*for (auto& e : mRitems[(int)RenderLayer::Shadow])
+	for (auto& e : mRitems[(int)RenderLayer::Shadow])
 	{
 		XMMATRIX world = XMLoadFloat4x4(&e->World);
 
@@ -1208,7 +1202,7 @@ void RollingTheBall::BuildObjectShadows()
 		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
 		XMStoreFloat4x4(&e->World, world * S * shadowOffsetY);
 		e->NumFramesDirty = gNumFrameResources;
-	}*/
+	}
 }
 //-------------------------------------------------------------------------------------------------------------------------------
 void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
