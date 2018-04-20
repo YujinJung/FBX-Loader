@@ -221,54 +221,56 @@ void RollingTheBall::OnMouseUp(WPARAM btnState, int x, int y)
 
 void RollingTheBall::OnMouseMove(WPARAM btnState, int x, int y)
 {
-	XMVECTOR eyePos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
-	XMVECTOR eyeTarget = XMVectorSet(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z, 0.0f);
-	XMVECTOR EyePosCalc = XMVectorSet(mEyePosCalc.x, mEyePosCalc.y, mEyePosCalc.z, 1.0f);
+	XMVECTOR EyePos = XMLoadFloat3(&mEyePos);
+	XMVECTOR EyeTarget = XMLoadFloat3(&mEyeTarget);
+	XMVECTOR EyeRight = XMLoadFloat3(&mEyeRight);
+	XMVECTOR EyeUp = XMLoadFloat3(&mEyeUp);
+	XMVECTOR EyeDirection = XMVector3Normalize(XMVectorSubtract(EyeTarget, EyePos));
 
-	XMFLOAT3 mPlayerTarget = mPlayer.getTarget();
-	XMFLOAT3 mPlayerPos = mPlayer.getPos();
-	float mPlayerYaw = mPlayer.getYaw();
-	float mPlayerVelocity = mPlayer.getVelocity();
+	float dx = XMConvertToRadians(0.5f*static_cast<float>(x - mLastMousePos.x));
+	float dy = XMConvertToRadians(0.5f*static_cast<float>(y - mLastMousePos.y));
 
 	if ((btnState & MK_LBUTTON) != 0)
 	{
-		float dx = XMConvertToRadians(0.5f*static_cast<float>(x - mLastMousePos.x));
-		float dy = XMConvertToRadians(0.5f*static_cast<float>(y - mLastMousePos.y));
-
 		// Update angles based on input to orbit camera around box.
 		mCameraTheta += dx;
 		mCameraPhi += dy;
 		mCameraPhi = MathHelper::Clamp(mCameraPhi, 0.1f, MathHelper::Pi - 0.1f);
 
-		mEyeTarget.x = mEyePos.x + 2 * mCameraRadius * sinf(mCameraPhi) * sinf(mPlayerYaw + mCameraTheta);
-		mEyeTarget.z = mEyePos.z + 2 * mCameraRadius * sinf(mCameraPhi) * cosf(mPlayerYaw + mCameraTheta);
-		mEyeTarget.y = mEyePos.y + 2 * mCameraRadius * cosf(mCameraPhi);
+		if (mCameraTheta > XM_PI)
+			mCameraTheta -= XM_2PI;
+		else if (mCameraTheta < -XM_PI)
+			mCameraTheta += XM_2PI;
+
+		XMVECTOR t = XMVectorSet(std::sinf(mCameraTheta), 1.0f, std::cosf(mCameraTheta), 0.0f);
+		XMVECTOR p = XMVectorSet(std::sinf(mCameraPhi), std::cosf(mCameraPhi), std::sinf(mCameraPhi), 0.0f);
+		XMVECTOR r = XMVectorSet(mCameraRadius, mCameraRadius, mCameraRadius, 0.0f);
+
+		EyeTarget = XMVectorMultiplyAdd(XMVectorMultiply(t, p), r, EyePos);
+		EyeRight = XMVector3Normalize(XMVector3Cross(EyeUp, EyeDirection));
 	}
 	else if ((btnState & MK_RBUTTON) != 0)
 	{
-		XMVECTOR playerPos = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
-		mCameraTheta = 0.0f;
-
-		float dx = XMConvertToRadians(0.5f*static_cast<float>(x - mLastMousePos.x));
-		float dy = XMConvertToRadians(0.5f*static_cast<float>(y - mLastMousePos.y));
-
 		// Update angles based on input to orbit camera around box.
-		mPlayerYaw += dx;
+		mCameraTheta += dx;
 		mCameraPhi += dy;
 		mCameraPhi = MathHelper::Clamp(mCameraPhi, 0.1f, MathHelper::Pi - 0.1f);
 
-		XMVECTOR EyePos = XMVectorSet(sinf(mPlayerYaw + XM_PI), 1.0f, cosf(mPlayerYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
-		XMStoreFloat3(&mEyePos, eyePos);
+		if (mCameraTheta > XM_PI)
+			mCameraTheta -= XM_2PI;
+		else if (mCameraTheta < -XM_PI)
+			mCameraTheta += XM_2PI;
 
-		mPlayerTarget.x = mPlayerPos.x + mCameraRadius * sinf(mCameraPhi) * sinf(mPlayerYaw);
-		mPlayerTarget.z = mPlayerPos.z + mCameraRadius * sinf(mCameraPhi) * cosf(mPlayerYaw);
+		XMVECTOR t = XMVectorSet(std::sinf(mCameraTheta), 1.0f, std::cosf(mCameraTheta), 0.0f);
+		XMVECTOR p = XMVectorSet(std::sinf(mCameraPhi), std::cosf(mCameraPhi), std::sinf(mCameraPhi), 0.0f);
+		XMVECTOR r = XMVectorSet(mCameraRadius, mCameraRadius, mCameraRadius, 0.0f);
+
+		EyeTarget = XMVectorMultiplyAdd(XMVectorMultiply(t, p), r, EyePos);
+		EyeRight = XMVector3Normalize(XMVector3Cross(EyeUp, EyeDirection));
 	}
 
-	mPlayer.setPos(mPlayerPos);
-	mPlayer.setTarget(mPlayerTarget);
-	mPlayer.setYaw(mPlayerYaw);
-	mPlayer.setVelocity(mPlayerVelocity);
+	XMStoreFloat3(&mEyeTarget, EyeTarget);
+	XMStoreFloat3(&mEyeRight, EyeRight);
 
 	mLastMousePos.x = x;
 	mLastMousePos.y = y;
@@ -276,199 +278,51 @@ void RollingTheBall::OnMouseMove(WPARAM btnState, int x, int y)
 
 void RollingTheBall::OnKeyboardInput(const GameTimer& gt)
 {
-	XMFLOAT3 mPlayerTarget = mPlayer.getTarget();
-	XMFLOAT3 mPlayerPos = mPlayer.getPos();
-	float mPlayerYaw = mPlayer.getYaw();
-	float mPlayerVelocity = mPlayer.getVelocity();
-	bool pushKey = false;
-	bool restart = false;
-
 	if (GetAsyncKeyState('1') & 0x8000)
 		mIsWireframe = true;
+	else if (GetAsyncKeyState('2') & 0x8000)
+		mFbxWireframe = true;
 	else
+	{
 		mIsWireframe = false;
-
-
-	if ((GetAsyncKeyState('W') & 0x8000) && mPlayerPos.z < mTargetPos.z - 20.0f)
-	{
-		pushKey = true;
-		mCameraTheta = 0.0f;
-		if (mPlayerVelocity <= 0.01f)
-			mPlayerVelocity += 0.000001f;
-	}
-	else if ((GetAsyncKeyState('S') & 0x8000) && mPlayerPos.z < mTargetPos.z - 20.0f)
-	{
-		pushKey = true;
-		mCameraTheta = 0.0f;
-		if (mPlayerVelocity >= -0.01f)
-			mPlayerVelocity -= 0.000001f;
-	}
-	else
-	{
-		if (mPlayerVelocity > 0.0f)
-		{
-			pushKey = true;
-			mPlayerVelocity -= 0.0000005f;
-		}
-		else if (mPlayerVelocity < 0.0f)
-		{
-			pushKey = true;
-			mPlayerVelocity += 0.0000005f;
-		}
+		mFbxWireframe = false;
 	}
 
-	if ((GetAsyncKeyState('A') & 0x8000) && mPlayerPos.z < mTargetPos.z - 20.0f)
-	{
-		pushKey = true;
-		mPlayerYaw -= 0.0001f;
+	XMVECTOR EyePos = XMLoadFloat3(&mEyePos);
+	XMVECTOR EyeTarget = XMLoadFloat3(&mEyeTarget);
+	XMVECTOR EyeRight = XMLoadFloat3(&mEyeRight);
+	XMVECTOR EyeDirection = XMVector3Normalize(XMVectorSubtract(EyeTarget, EyePos));
 
-		mPlayerTarget.x = mPlayerPos.x + mCameraRadius * sinf(mCameraPhi) * sinf(mPlayerYaw);
-		mPlayerTarget.z = mPlayerPos.z + mCameraRadius * sinf(mCameraPhi) * cosf(mPlayerYaw);
+	XMVECTOR ResizeVector = XMVectorSet(0.01f, 0.01f, 0.01f, 0.0f);
+	EyeDirection = XMVectorMultiply(EyeDirection, ResizeVector);
+	EyeRight = XMVectorMultiply(EyeRight, ResizeVector);
+
+
+	if (GetAsyncKeyState('W') & 0x8000)
+	{
+		EyePos = XMVectorAdd(EyePos, EyeDirection);
+		EyeTarget = XMVectorAdd(EyeTarget, EyeDirection);
 	}
-	else if ((GetAsyncKeyState('D') & 0x8000) && mPlayerPos.z < mTargetPos.z - 20.0f)
+	else if (GetAsyncKeyState('S') & 0x8000) 
 	{
-		pushKey = true;
-		mPlayerYaw += 0.0001f;
-
-		mPlayerTarget.x = mPlayerPos.x + mCameraRadius * sinf(mCameraPhi) * sinf(mPlayerYaw);
-		mPlayerTarget.z = mPlayerPos.z + mCameraRadius * sinf(mCameraPhi) * cosf(mPlayerYaw);
-	}
-
-	if (GetAsyncKeyState('R') & 0x8000)
-	{
-		pushKey = true;
-		mPlayerPos = { 0.0f, 2.0f, 0.0f };
-		mEyePos = { 0.0f, 30.0f, -30.0f };
-		mPlayerTarget = { 0.0f, 2.0f, 15.0f };
-		mEyeTarget = mPlayerPos;
-
-		mPlayerVelocity = 0.0f;
-		mPlayerYaw = 0.0f;
-
-		srand(gt.TotalTime());
-		mTargetPos.x = (float)(rand() % 10);
-		mTargetPos.x -= 5.0f;
-		restart = true;
+		EyePos = XMVectorAdd(EyePos, -EyeDirection);
+		EyeTarget = XMVectorAdd(EyeTarget, -EyeDirection);
 	}
 
-	if (mPlayerYaw > XM_PI)
-		mPlayerYaw -= XM_2PI;
-	else if (mPlayerYaw < -XM_PI)
-		mPlayerYaw += XM_2PI;
-
-	mPlayer.setPos(mPlayerPos);
-	mPlayer.setTarget(mPlayerTarget);
-	mPlayer.setYaw(mPlayerYaw);
-	mPlayer.setVelocity(mPlayerVelocity);
-	if (restart == true)
+	if (GetAsyncKeyState('A') & 0x8000)
 	{
-		//UpdateObjectShadows();
+		EyePos = XMVectorAdd(EyePos, -EyeRight);
+		EyeTarget = XMVectorAdd(EyeTarget, -EyeRight);
 	}
-	if (pushKey == true)
+	else if (GetAsyncKeyState('D') & 0x8000)
 	{
-		UpdatePlayerPosition(gt);
+		EyePos = XMVectorAdd(EyePos, EyeRight);
+		EyeTarget = XMVectorAdd(EyeTarget, EyeRight);
 	}
-
-}
-
-//-------------------------------------------------------------------------------------------------------------------------------
-void RollingTheBall::UpdatePlayerPosition(const GameTimer& gt)
-{
-	XMFLOAT3 mPlayerTarget = mPlayer.getTarget();
-	XMFLOAT3 mPlayerPos = mPlayer.getPos();
-	float mPlayerYaw = mPlayer.getYaw();
-	float mPlayerRoll = mPlayer.getRoll();
-	float mPlayerVelocity = mPlayer.getVelocity();
-	static float prePlayerVelocity = mPlayerVelocity;
-	float mPlayerRadius = mPlayer.getRadius();
-
-	XMVECTOR EyePos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
-	XMVECTOR PlayerPos = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
-	XMVECTOR PlayerTarget = XMVectorSet(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z, 0.0f);
-	XMVECTOR EyePosCalc = XMVectorSet(mEyePosCalc.x, mEyePosCalc.y, mEyePosCalc.z, 1.0f);
-	XMVECTOR PlayerDirection = XMVector3Normalize(XMVectorSubtract(PlayerTarget, PlayerPos));
-	XMVECTOR PlayerMove;
-	XMMATRIX world = XMLoadFloat4x4(&mPlayerRitem->World);
-
-	for (auto& e : mCollisionRitems)
-	{
-		XMVECTOR ObjPos = XMVectorSet(e->originVector.x, e->originVector.y, e->originVector.z, 1.0f);
-
-		if (MathHelper::getDistance(PlayerPos, ObjPos) <= e->radius + mPlayerRadius)
-		{
-			XMVECTOR ObjDirection = XMVector3Normalize(XMVectorSubtract(ObjPos, PlayerPos));
-
-			PlayerPos = XMVectorSubtract(PlayerPos, 0.1f * ObjDirection);
-			PlayerTarget = XMVectorSubtract(PlayerTarget, 0.1f * ObjDirection);
-
-			mPlayerVelocity *= 0.95f;
-
-			break;
-		}
-	}
-
-	// Fsor LEFT MOUSE control
-	if ((mPlayerVelocity != prePlayerVelocity) || (mPlayerVelocity >= 0.01f) || (mPlayerVelocity <= -0.01f))
-	{
-		mPlayerRitem->NumFramesDirty = gNumFrameResources;
-		PlayerMove = mPlayerVelocity * PlayerDirection;
-
-		PlayerPos = XMVectorAdd(PlayerPos, PlayerMove);
-		PlayerTarget = XMVectorAdd(PlayerTarget, PlayerMove);
-		XMStoreFloat3(&mEyeTarget, PlayerPos);
-
-		// Roll value according to direction
-		if (mPlayerYaw < 0.0f)
-		{
-			PlayerMove.m128_f32[0] *= -1.0f;
-		}
-		if (mPlayerYaw < -1.0f * XM_PIDIV2 || mPlayerYaw > XM_PIDIV2)
-		{
-			PlayerMove.m128_f32[2] *= -1.0f;
-		}
-
-		mPlayerRoll += PlayerMove.m128_f32[0] + PlayerMove.m128_f32[2];
-
-		if (mPlayerRoll > XM_PI)
-			mPlayerRoll -= XM_2PI;
-		else if (mPlayerRoll < -XM_PI)
-			mPlayerRoll += XM_2PI;
-		world = XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixRotationY(mPlayerYaw) * XMMatrixTranslationFromVector(PlayerPos);
-
-		// Distance between player and target 
-		mDistanceToTarget = MathHelper::getDistance(PlayerPos, XMVectorSet(mTargetPos.x, mTargetPos.y, mTargetPos.z, 1.0f));
-
-		// Update Shadow
-		//UpdatePlayerShadow(gt);
-
-		prePlayerVelocity = mPlayerVelocity;
-	}
-
-	XMVECTOR EyePosOne = XMVectorSet(sinf(mPlayerYaw + XM_PI), 1.0f, cosf(mPlayerYaw + XM_PI), 1.0f);
-	EyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, PlayerPos);
 
 	XMStoreFloat3(&mEyePos, EyePos);
-	XMStoreFloat3(&mPlayerPos, PlayerPos);
-	XMStoreFloat3(&mPlayerTarget, PlayerTarget);
-	XMStoreFloat4x4(&mPlayerRitem->World, world);
+	XMStoreFloat3(&mEyeTarget, EyeTarget);
 
-	mPlayer.setPos(mPlayerPos);
-	mPlayer.setTarget(mPlayerTarget);
-	mPlayer.setVelocity(mPlayerVelocity);
-	mPlayer.setRoll(mPlayerRoll);
-}
-
-void RollingTheBall::UpdatePlayerShadow(const GameTimer& gt)
-{
-	/*XMFLOAT3 mPlayerPos = mPlayer.getPos();
-	XMMATRIX playerWorld = XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixTranslation(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z);
-
-	XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-	XMVECTOR toMainLight = -XMLoadFloat3(&mMainLight.Direction);
-	XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
-	XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
-	XMStoreFloat4x4(&mShadowedPlayerRitem->World, playerWorld * S * shadowOffsetY);
-	mShadowedPlayerRitem->NumFramesDirty = gNumFrameResources;*/
 }
 
 void RollingTheBall::UpdateCamera(const GameTimer& gt)
@@ -484,10 +338,6 @@ void RollingTheBall::UpdateCamera(const GameTimer& gt)
 
 void RollingTheBall::UpdateObjectCBs(const GameTimer& gt)
 {
-	XMVECTOR PlayerPos = XMLoadFloat3(&mPlayer.getPos());
-	XMVECTOR PlayerTarget = XMLoadFloat3(&mPlayer.getTarget());
-	float mYaw = mPlayer.getYaw();
-
 	auto currObjectCB = mCurrFrameResource->ObjectCB.get();
 
 	for (auto& e : mAllRitems)
@@ -510,23 +360,6 @@ void RollingTheBall::UpdateObjectCBs(const GameTimer& gt)
 		}
 	}
 
-	//for (auto& e : mRitems[(int)RenderLayer::Shadow])
-	//{
-	//	if (e->NumFramesDirty > 0)
-	//	{
-	//		XMMATRIX world = XMLoadFloat4x4(&e->World);
-	//		XMMATRIX texTransform = XMLoadFloat4x4(&e->TexTransform);
-
-	//		ObjectConstants objConstants;
-	//		XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
-	//		XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
-
-	//		currObjectCB->CopyData(e->ObjCBIndex, objConstants);
-
-	//		// Next FrameResource need to be updated too.
-	//		e->NumFramesDirty--;
-	//	}
-	//}
 }
 
 void RollingTheBall::UpdateObjectShadows()
