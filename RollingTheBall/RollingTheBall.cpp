@@ -1148,31 +1148,7 @@ void RollingTheBall::BuildRenderItems()
 	mRitems[(int)RenderLayer::Opaque].push_back(gridRitem.get());
 	mAllRitems.push_back(std::move(gridRitem));
 
-	// Player
-	auto playerRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&playerRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f)*XMMatrixTranslation(0.0f, 2.0f, 0.0f));
-	XMStoreFloat4x4(&playerRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
-	playerRitem->ObjCBIndex = objCBIndex++;
-	playerRitem->Mat = mMaterials["tile0"].get();
-	playerRitem->Geo = mGeometries["shapeGeo"].get();
-	playerRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	playerRitem->IndexCount = playerRitem->Geo->DrawArgs["sphere"].IndexCount;
-	playerRitem->StartIndexLocation = playerRitem->Geo->DrawArgs["sphere"].StartIndexLocation;
-	playerRitem->BaseVertexLocation = playerRitem->Geo->DrawArgs["sphere"].BaseVertexLocation;
-	mPlayerRitem = playerRitem.get();
-	mPlayerRitem->NumFramesDirty = gNumFrameResources;
-	mRitems[(int)RenderLayer::Opaque].push_back(playerRitem.get());
-	mAllRitems.push_back(std::move(playerRitem));
-
 	auto FbxRitem = std::make_unique<RenderItem>();
-	// Line
-	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f, 1.0f, 2.0f) * XMMatrixTranslation(0.0f, 0.0f, mTargetPos.z - 20.0f));
-	// Cone
-	//XMStoreFloat4x4(&lineRitem->World, XMMatrixScaling(20.0f,20.0f, 20.0f) *  XMMatrixTranslation(0.0f, 10.0f, 10.0f));
-	//Tank because of size
-	//XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
-	//XMStoreFloat4x4(&FbxRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
-	//XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f) *  XMMatrixTranslation(0.0f, 0.0f, 10.0f));
 	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f)*XMMatrixTranslation(0.0f, 2.0f, 0.0f));
 	FbxRitem->TexTransform = MathHelper::Identity4x4();
 	FbxRitem->ObjCBIndex = objCBIndex++;
