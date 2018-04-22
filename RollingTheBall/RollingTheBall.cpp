@@ -159,22 +159,20 @@ void RollingTheBall::Draw(const GameTimer& gt)
 
 	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 
-	//int skinnedCbvIndex = mSkinCbvOffset + mCurrFrameResourceIndex;
-	//auto skinnedCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-	//skinnedCbvHandle.Offset(skinnedCbvIndex, mCbvSrvDescriptorSize);
-	//mCommandList->SetGraphicsRootDescriptorTable(4, skinnedCbvHandle);
-	//DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
-
 	int passCbvIndex = mPassCbvOffset + mCurrFrameResourceIndex;
 	auto passCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 	passCbvHandle.Offset(passCbvIndex, mCbvSrvDescriptorSize);
 	mCommandList->SetGraphicsRootDescriptorTable(3, passCbvHandle);
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Opaque]);
 
-	// TODO
-	if (!mIsWireframe)
+	if (!mFbxWireframe)
 	{
 		mCommandList->SetPipelineState(mPSOs["skinnedOpaque"].Get());
+	}
+	else
+	{
+		mCommandList->SetPipelineState(mPSOs["skinnedOpaque_wireframe"].Get());
+		
 	}
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
 
@@ -438,26 +436,6 @@ void RollingTheBall::UpdateAnimationCBs(const GameTimer & gt)
 		std::end(mSkinnedModelInst->FinalTransforms),
 		&skinnedConstants.BoneTransforms[0]);
 
-	// Final Transform Debug
-	/*for (int i = 0; i < mSkinnedInfo.BoneCount(); ++i)
-	{
-		std::wstring text = L"Final Transform" + std::to_wstring(i) + L"\n";
-		::OutputDebugString(text.c_str());
-
-		for (int j = 0; j < 4; ++j)
-		{
-			for (int k = 0; k < 4; ++k)
-			{
-				std::wstring text =
-					std::to_wstring(skinnedConstants.BoneTransforms[i].m[j][k]) + L" ";
-
-				::OutputDebugString(text.c_str());
-			}
-			std::wstring text = L"\n";
-			::OutputDebugString(text.c_str());
-
-		}
-	}*/
 	currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
@@ -692,7 +670,6 @@ void RollingTheBall::BuildRootSignature()
 	CD3DX12_ROOT_PARAMETER slotRootParameter[5];
 
 	// Create root CBVs.
-
 	slotRootParameter[0].InitAsDescriptorTable(1, &texTable, D3D12_SHADER_VISIBILITY_PIXEL);
 	slotRootParameter[1].InitAsDescriptorTable(1, &cbvTable[0]);
 	slotRootParameter[2].InitAsDescriptorTable(1, &cbvTable[1]);
@@ -734,10 +711,10 @@ void RollingTheBall::BuildShadersAndInputLayout()
 		NULL, NULL
 	};
 
-	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "VS", "vs_5_1");
-	mShaders["skinnedVS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", skinnedDefines, "VS", "vs_5_1");
-	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "PS", "ps_5_1");
-	mShaders["skinnedPS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", skinnedDefines, "PS", "ps_5_1");
+	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "VS", "vs_5_1");
+	mShaders["skinnedVS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", skinnedDefines, "VS", "vs_5_1");
+	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "PS", "ps_5_1");
+	mShaders["skinnedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", skinnedDefines, "PS", "ps_5_1");
 
 	mInputLayout =
 	{
@@ -896,7 +873,7 @@ void RollingTheBall::BuildFbxGeometry()
 	mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
 	mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
 	mSkinnedModelInst->FinalTransforms.resize(mSkinnedInfo.BoneCount());
-	mSkinnedModelInst->ClipName = mSkinnedInfo.GetAnimationName();
+	mSkinnedModelInst->ClipName = mSkinnedInfo.GetAnimationName(0);
 	mSkinnedModelInst->TimePos = 0.0f;
 
 	if (outVertices.size() == 0)
@@ -904,27 +881,6 @@ void RollingTheBall::BuildFbxGeometry()
 		MessageBox(0, L"Fbx not found", 0, 0);
 		return;
 	}
-
-	// Bone Offset Debug
-	/*for (int i = 0; i < mSkinnedInfo.BoneCount(); ++i)
-	{
-		std::wstring text = L"Bone" + std::to_wstring(i) + L"\n";
-		::OutputDebugString(text.c_str());
-
-		for (int j = 0; j < 4; ++j)
-		{
-			for (int k = 0; k < 4; ++k)
-			{
-				std::wstring text =
-					std::to_wstring(mSkinnedInfo.getBoneOffsets(i).m[j][k]) + L" ";
-
-				::OutputDebugString(text.c_str());
-			}
-			std::wstring text = L"\n";
-			::OutputDebugString(text.c_str());
-
-		}
-	}*/
 
 	UINT vCount = 0, iCount = 0;
 	vCount = outVertices.size();
@@ -1043,8 +999,6 @@ void RollingTheBall::BuildPSOs()
 	};
 
 	opaquePsoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	//opaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-	//opaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
 	opaquePsoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	opaquePsoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	opaquePsoDesc.SampleMask = UINT_MAX;
@@ -1056,9 +1010,9 @@ void RollingTheBall::BuildPSOs()
 	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
 
+	//
 	// PSO for skinned
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaquePsoDesc = opaquePsoDesc;
-	//skinnedOpaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 	skinnedOpaquePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
 	skinnedOpaquePsoDesc.VS =
 	{
@@ -1067,13 +1021,40 @@ void RollingTheBall::BuildPSOs()
 	};
 	skinnedOpaquePsoDesc.PS =
 	{
-		/*reinterpret_cast<BYTE*>(mShaders["opaquePS"]->GetBufferPointer()),
-		mShaders["opaquePS"]->GetBufferSize()*/
 		reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
 		mShaders["skinnedPS"]->GetBufferSize()
 	};
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
 
+	// PSO for skinned wireframe objects.
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaqueWireframePsoDesc = opaquePsoDesc;
+	skinnedOpaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	skinnedOpaqueWireframePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
+	skinnedOpaqueWireframePsoDesc.VS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
+		mShaders["skinnedVS"]->GetBufferSize()
+	};
+	skinnedOpaqueWireframePsoDesc.PS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
+		mShaders["skinnedPS"]->GetBufferSize()
+	};
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque_wireframe"])));
+
+
+	//
+	// PSO for opaque wireframe objects.
+	//
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaqueWireframePsoDesc = opaquePsoDesc;
+	opaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
+
+	//
+	// Shadow
+
+	/*
 	// PSO for Shadow
 	D3D12_RENDER_TARGET_BLEND_DESC shadowBlendDesc;
 	shadowBlendDesc.BlendEnable = true;
@@ -1110,14 +1091,7 @@ void RollingTheBall::BuildPSOs()
 	shadowPsoDesc.DepthStencilState = shadowDSS;
 	shadowPsoDesc.BlendState.RenderTarget[0] = shadowBlendDesc;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&shadowPsoDesc, IID_PPV_ARGS(&mPSOs["shadow"])));
-
-	//
-	// PSO for opaque wireframe objects.
-	//
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaqueWireframePsoDesc = opaquePsoDesc;
-	opaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
+	*/
 }
 
 void RollingTheBall::BuildFrameResources()

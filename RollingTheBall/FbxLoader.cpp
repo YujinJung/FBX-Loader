@@ -49,15 +49,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 	FbxNode* pFbxRootNode = pFbxScene->GetRootNode();
 	if (pFbxRootNode)
 	{
-		// skinnedData Output
-		std::vector<int> mBoneHierarchy;
-		std::vector<DirectX::XMFLOAT4X4> mBoneOffsets;
-		std::unordered_map<std::string, AnimationClip> mAnimations;
-
-		// tempData
-		std::vector<std::string> boneName;
-		std::vector<Vertex> tempVertexVector;
-
+		// Skeleton Bone Hierarchy Index 
 		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
 		{
 			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
@@ -68,11 +60,13 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 			switch (AttributeType)
 			{
 			case FbxNodeAttribute::eSkeleton:
-				GetSkeletonHierarchy(pFbxChildNode, 0, -1, mBoneHierarchy, boneName);
+				GetSkeletonHierarchy(pFbxChildNode, 0, -1);
 				break;
 			}
 		}
 
+		// Bone offset, Control point, Vertex, Index Data
+		// And Animation Data
 		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
 		{
 			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
@@ -80,9 +74,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 			FbxNodeAttribute::EType AttributeType = pMesh->GetAttributeType();
 			if (!pMesh || !AttributeType) { continue; }
 
-			// Animation
-			AnimationClip animation;
-			std::string animationName;
+			
 
 			switch (AttributeType)
 			{
@@ -90,17 +82,21 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 
 				GetControlPoints(pFbxChildNode);
 
+				// To access the bone index directly
 				mBoneOffsets.resize(mBoneHierarchy.size());
-				//outVertexVector.resize(tempVertexVector.size());
+
 				// Get Animation Clip
-				GetAnimation(pFbxScene, pFbxChildNode, mBoneOffsets, boneName, animation, animationName);
-				mAnimations[animationName] = animation;
-				outSkinnedData.SetAnimationName(animationName);
+				std::string outAnimationName;
+				GetAnimation(pFbxScene, pFbxChildNode, outAnimationName);
+				outSkinnedData.SetAnimationName(outAnimationName);
 
 				// Get Vertices and indices info
 				GetVerticesAndIndice(pMesh, outVertexVector, outIndexVector);
 
 				break;
+			
+				// TODO Material
+
 			}
 
 		}
@@ -110,29 +106,43 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 	return S_OK;
 }
 
+void FbxLoader::GetSkeletonHierarchy(FbxNode * inNode, int curIndex, int parentIndex)
+{
+	mBoneHierarchy.push_back(parentIndex);
+	boneName.push_back(inNode->GetName());
+
+	for (int i = 0; i < inNode->GetChildCount(); ++i)
+	{
+		GetSkeletonHierarchy(inNode->GetChild(i), mBoneHierarchy.size(), curIndex);
+	}
+}
+
 void FbxLoader::GetControlPoints(fbxsdk::FbxNode * pFbxRootNode)
 {
 	FbxMesh * pCurrMesh = (FbxMesh*)pFbxRootNode->GetNodeAttribute();
+
 	unsigned int ctrlPointCount = pCurrMesh->GetControlPointsCount();
 	for (unsigned int i = 0; i < ctrlPointCount; ++i)
 	{
 		CtrlPoint* currCtrlPoint = new CtrlPoint();
+		
 		DirectX::XMFLOAT3 currPosition;
 		currPosition.x = static_cast<float>(pCurrMesh->GetControlPointAt(i).mData[0]);
 		currPosition.y = static_cast<float>(pCurrMesh->GetControlPointAt(i).mData[1]);
 		currPosition.z = static_cast<float>(pCurrMesh->GetControlPointAt(i).mData[2]);
+
 		currCtrlPoint->mPosition = currPosition;
 		mControlPoints[i] = currCtrlPoint;
 	}
 }
 
-void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::vector<DirectX::XMFLOAT4X4> &mBoneOffsets, const std::vector<std::string>& boneName, AnimationClip &animation, std::string &animationName)
+void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::string &outAnimationName)
 {
 	FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
 	FbxAMatrix geometryTransform = GetGeometryTransformation(pFbxChildNode);
-	
-	/*std::vector<BoneIndexAndWeight> vBoneIndexAndWeight;
-	vBoneIndexAndWeight.resize(outVertexVector.size());*/
+
+	// Animation Data
+	AnimationClip animation;
 
 	// Initialize BoneAnimations
 	animation.BoneAnimations.resize(boneName.size());
@@ -152,7 +162,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 		animation.BoneAnimations[i] = initBoneAnim;
 	}
 
-	/// Deformer - Cluster - Link
+	// Deformer - Cluster - Link
 	// Deformer
 	for (uint32_t deformerIndex = 0; deformerIndex < pMesh->GetDeformerCount(); ++deformerIndex)
 	{
@@ -163,16 +173,17 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 		for (uint32_t clusterIndex = 0; clusterIndex < pCurrSkin->GetClusterCount(); ++clusterIndex)
 		{
 			FbxCluster* pCurrCluster = pCurrSkin->GetCluster(clusterIndex);
-			FbxAMatrix transformMatrix;
-			FbxAMatrix transformLinkMatrix;
+
+			FbxAMatrix transformMatrix, transformLinkMatrix;
 			FbxAMatrix globalBindposeInverseMatrix;
 
 			transformMatrix = pCurrCluster->GetTransformMatrix(transformMatrix);	// The transformation of the mesh at binding time
 			transformLinkMatrix = pCurrCluster->GetTransformLinkMatrix(transformLinkMatrix);	// The transformation of the cluster(joint) at binding time from joint space to world space
 			globalBindposeInverseMatrix = transformLinkMatrix.Inverse() * transformMatrix * geometryTransform;
 
+			// To find the index that matches the name of the current joint
 			std::string currJointName = pCurrCluster->GetLink()->GetName();
-			BYTE currJointIndex;
+			BYTE currJointIndex; // current joint index
 			for (currJointIndex = 0; currJointIndex< boneName.size(); ++currJointIndex)
 			{
 				if (boneName[currJointIndex] == currJointName)
@@ -206,7 +217,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 
 			FbxAnimStack* pCurrAnimStack = pFbxScene->GetSrcObject<FbxAnimStack>(0);
 			FbxString currAnimStackName = pCurrAnimStack->GetName();
-			animationName = currAnimStackName.Buffer();
+			outAnimationName = currAnimStackName.Buffer();
 
 			FbxAnimEvaluator* pSceneEvaluator = pFbxScene->GetAnimationEvaluator();
 
@@ -221,11 +232,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 
 				Keyframe key;
 				key.TimePos = (float)i / 24.0f;
-				/*FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateLocalTransform(currTime) * geometryTransform;
-				FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateLocalTransform(currTime);*/
 
-				//FbxAMatrix currentTransformOffset = pFbxChildNode->EvaluateGlobalTransform(currTime) * geometryTransform;
-				//FbxAMatrix temp = currentTransformOffset.Inverse() * pCurrCluster->GetLink()->EvaluateGlobalTransform(currTime);
 				FbxAMatrix currentTransformOffset = pSceneEvaluator->GetNodeGlobalTransform(pFbxChildNode, currTime) * geometryTransform;
 				FbxAMatrix temp = currentTransformOffset.Inverse() * pSceneEvaluator->GetNodeGlobalTransform(pCurrCluster->GetLink(), currTime);
 
@@ -254,74 +261,21 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 		}
 	}
 
-	/*for (uint32_t i = 0; i < outVertexVector.size(); ++i)
-	{
-		auto& currVertexVector = outVertexVector[i];
-		currVertexVector.BoneWeights = { 0.0f, 0.0f, 0.0f };
-
-		currVertexVector.Pos = tempVertexVector[i].Pos;
-		currVertexVector.Normal = tempVertexVector[i].Normal;
-		currVertexVector.TexC = tempVertexVector[i].TexC;
-
-		// weight
-		for (uint32_t j = 0; j < vBoneIndexAndWeight[i].vBoneWeight.size(); ++j)
-		{
-			if (j == 3)
-				break;
-			switch (j)
-			{
-			case 0:
-				currVertexVector.BoneWeights.x = vBoneIndexAndWeight[i].vBoneWeight[j];
-				break;
-			case 1:
-				currVertexVector.BoneWeights.y = vBoneIndexAndWeight[i].vBoneWeight[j];
-				break;
-			case 2:
-				currVertexVector.BoneWeights.z = vBoneIndexAndWeight[i].vBoneWeight[j];
-				break;
-			}
-		}
-			
-		// indice
-		if (vBoneIndexAndWeight[i].vBoneIndices.size() < 4)
-		{
-			currVertexVector.BoneIndices[0] = currVertexVector.BoneIndices[1]
-				= currVertexVector.BoneIndices[2] = currVertexVector.BoneIndices[3] = 0;
-		}
-		for (uint32_t j = 0; j < vBoneIndexAndWeight[i].vBoneIndices.size(); ++j)
-		{
-			if (j == 4)
-				break;
-			
-			currVertexVector.BoneIndices[j] = vBoneIndexAndWeight[i].vBoneIndices[j];
-		}
-	}*/
+	mAnimations[outAnimationName] = animation;
 }
 
 void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex> & outVertexVector, std::vector<uint16_t> & outIndexVector)
 {
 	std::unordered_map<Vertex, uint16_t> indexMapping;
-	std::vector<Vertex> tempVertexVector;
-	int vertexCounter = 0;
-	//FbxVector4* pVertices = pMesh->GetControlPoints();
+	uint32_t vertexIndex = 0;
 
-	uint32_t vCount = pMesh->GetControlPointsCount(); // Vertex
 	uint32_t tCount = pMesh->GetPolygonCount(); // Triangle
-
 	for (int j = 0; j < tCount; ++j)
 	{
 		for (int k = 0; k < 3; ++k)
 		{
-			// Vertces
-			Vertex outVertex;
-			// TODO : DELETE
-			float t = 1.f;
-			//float t = 1.f;
-
 			int controlPointIndex = pMesh->GetPolygonVertex(j, k);
 			CtrlPoint* currCtrlPoint = mControlPoints[controlPointIndex];
-
-			outVertex.Pos = currCtrlPoint->mPosition;
 
 			FbxVector4 pNormal;
 			pMesh->GetPolygonVertexNormal(j, k, pNormal);
@@ -330,28 +284,20 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 			bool bUnMappedUV;
 			pMesh->GetPolygonVertexUV(j, k, "", pUVs, bUnMappedUV);
 			
-
-			/*ReadNormal(pMesh, controlPointIndex, vertexCounter, normal[k]);
-			for (int l = 0; l < 1; ++l)
-			{
-				ReadUV(pMesh, controlPointIndex, pMesh->GetTextureUVIndex(j, k), k, UV[k][l]);
-			}*/
-			
-			////
 			Vertex temp;
-			temp.Pos.x = currCtrlPoint->mPosition.x * t;
-			temp.Pos.y = currCtrlPoint->mPosition.y * t;
-			temp.Pos.z = currCtrlPoint->mPosition.z * t;
+			// Position
+			temp.Pos.x = currCtrlPoint->mPosition.x;
+			temp.Pos.y = currCtrlPoint->mPosition.y;
+			temp.Pos.z = currCtrlPoint->mPosition.z;
 
-			temp.Normal.x = pNormal.mData[0] * t;
-			temp.Normal.y = pNormal.mData[1] * t;
-			temp.Normal.z = pNormal.mData[2] * t;
+			// Normal
+			temp.Normal.x = pNormal.mData[0];
+			temp.Normal.y = pNormal.mData[1];
+			temp.Normal.z = pNormal.mData[2];
 
-			// Need to modify TexC
-			temp.TexC.x = pUVs.mData[0] * t;
-			temp.TexC.y = pUVs.mData[1] * t;
-			/*temp.Normal = normal[k];
-			temp.TexC = UV[k][0];*/
+			// UV
+			temp.TexC.x = pUVs.mData[0];
+			temp.TexC.y = pUVs.mData[1];
 
 			// push vertex and index
 			auto lookup = indexMapping.find(temp);
@@ -362,11 +308,12 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 			}
 			else
 			{
-				uint16_t index = tempVertexVector.size();
+				// Index
+				uint16_t index = vertexIndex++;
 				indexMapping[temp] = index;
-				tempVertexVector.push_back(temp);
 				outIndexVector.push_back(index);
 
+				// Vertex
 				SkinnedVertex skinnedVertexInfo;
 				skinnedVertexInfo.Pos = temp.Pos;
 				skinnedVertexInfo.Normal = temp.Normal;
@@ -374,10 +321,12 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 
 				currCtrlPoint->SortBlendingInfoByWeight();
 
+				// Set the Bone information
 				for (int l = 0; l < currCtrlPoint->mBoneInfo.size(); ++l)
 				{
 					if (l >= 4)
 						break;
+
 					skinnedVertexInfo.BoneIndices[l] = currCtrlPoint->mBoneInfo[l].vBoneIndices;
 
 					switch (l)
@@ -396,133 +345,7 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 
 				outVertexVector.push_back(skinnedVertexInfo);
 			}
-
 		}
-			//++vertexCounter;
-	}
-}
-
-void FbxLoader::ReadUV(FbxMesh* pMesh, int inCtrlPointIndex, int inTextureUVIndex, int inUVLayer, DirectX::XMFLOAT2& outUV)
-{
-	if (inUVLayer >= 2 || pMesh->GetElementUVCount() <= inUVLayer)
-	{
-		throw std::exception("Invalid UV Layer Number");
-	}
-	FbxGeometryElementUV* vertexUV = pMesh->GetElementUV(inUVLayer);
-
-	switch (vertexUV->GetMappingMode())
-	{
-	case FbxGeometryElement::eByControlPoint:
-		switch (vertexUV->GetReferenceMode())
-		{
-		case FbxGeometryElement::eDirect:
-		{
-			outUV.x = static_cast<float>(vertexUV->GetDirectArray().GetAt(inCtrlPointIndex).mData[0]);
-			outUV.y = static_cast<float>(vertexUV->GetDirectArray().GetAt(inCtrlPointIndex).mData[1]);
-		}
-		break;
-
-		case FbxGeometryElement::eIndexToDirect:
-		{
-			int index = vertexUV->GetIndexArray().GetAt(inCtrlPointIndex);
-			outUV.x = static_cast<float>(vertexUV->GetDirectArray().GetAt(index).mData[0]);
-			outUV.y = static_cast<float>(vertexUV->GetDirectArray().GetAt(index).mData[1]);
-		}
-		break;
-
-		default:
-			throw std::exception("Invalid Reference");
-		}
-		break;
-
-	case FbxGeometryElement::eByPolygonVertex:
-		switch (vertexUV->GetReferenceMode())
-		{
-		case FbxGeometryElement::eDirect:
-		case FbxGeometryElement::eIndexToDirect:
-		{
-			outUV.x = static_cast<float>(vertexUV->GetDirectArray().GetAt(inTextureUVIndex).mData[0]);
-			outUV.y = static_cast<float>(vertexUV->GetDirectArray().GetAt(inTextureUVIndex).mData[1]);
-		}
-		break;
-
-		default:
-			throw std::exception("Invalid Reference");
-		}
-		break;
-	}
-}
-
-void FbxLoader::ReadNormal(FbxMesh* pMesh, int inCtrlPointIndex, int inVertexCounter, DirectX::XMFLOAT3& outNormal)
-{
-	if (pMesh->GetElementNormalCount() < 1)
-	{
-		throw std::exception("Invalid Normal Number");
-	}
-
-	FbxGeometryElementNormal* vertexNormal = pMesh->GetElementNormal(0);
-	switch (vertexNormal->GetMappingMode())
-	{
-	case FbxGeometryElement::eByControlPoint:
-		switch (vertexNormal->GetReferenceMode())
-		{
-		case FbxGeometryElement::eDirect:
-		{
-			outNormal.x = static_cast<float>(vertexNormal->GetDirectArray().GetAt(inCtrlPointIndex).mData[0]);
-			outNormal.y = static_cast<float>(vertexNormal->GetDirectArray().GetAt(inCtrlPointIndex).mData[1]);
-			outNormal.z = static_cast<float>(vertexNormal->GetDirectArray().GetAt(inCtrlPointIndex).mData[2]);
-		}
-		break;
-
-		case FbxGeometryElement::eIndexToDirect:
-		{
-			int index = vertexNormal->GetIndexArray().GetAt(inCtrlPointIndex);
-			outNormal.x = static_cast<float>(vertexNormal->GetDirectArray().GetAt(index).mData[0]);
-			outNormal.y = static_cast<float>(vertexNormal->GetDirectArray().GetAt(index).mData[1]);
-			outNormal.z = static_cast<float>(vertexNormal->GetDirectArray().GetAt(index).mData[2]);
-		}
-		break;
-
-		default:
-			throw std::exception("Invalid Reference");
-		}
-		break;
-
-	case FbxGeometryElement::eByPolygonVertex:
-		switch (vertexNormal->GetReferenceMode())
-		{
-		case FbxGeometryElement::eDirect:
-		{
-			outNormal.x = static_cast<float>(vertexNormal->GetDirectArray().GetAt(inVertexCounter).mData[0]);
-			outNormal.y = static_cast<float>(vertexNormal->GetDirectArray().GetAt(inVertexCounter).mData[1]);
-			outNormal.z = static_cast<float>(vertexNormal->GetDirectArray().GetAt(inVertexCounter).mData[2]);
-		}
-		break;
-
-		case FbxGeometryElement::eIndexToDirect:
-		{
-			int index = vertexNormal->GetIndexArray().GetAt(inVertexCounter);
-			outNormal.x = static_cast<float>(vertexNormal->GetDirectArray().GetAt(index).mData[0]);
-			outNormal.y = static_cast<float>(vertexNormal->GetDirectArray().GetAt(index).mData[1]);
-			outNormal.z = static_cast<float>(vertexNormal->GetDirectArray().GetAt(index).mData[2]);
-		}
-		break;
-
-		default:
-			throw std::exception("Invalid Reference");
-		}
-		break;
-	}
-}
-
-void FbxLoader::GetSkeletonHierarchy(FbxNode * inNode, int curIndex, int parentIndex, std::vector<int>& mBoneHierarchy, std::vector<std::string>& boneName)
-{
-	mBoneHierarchy.push_back(parentIndex);
-	boneName.push_back(inNode->GetName());
-
-	for (int i = 0; i < inNode->GetChildCount(); ++i)
-	{
-		GetSkeletonHierarchy(inNode->GetChild(i), mBoneHierarchy.size(), curIndex, mBoneHierarchy, boneName);
 	}
 }
 

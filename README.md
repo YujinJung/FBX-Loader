@@ -5,7 +5,7 @@
 <br/>
 
 ## Animation
-![](./Resource/Stabbing_Anim.gif)
+![](./Resource/FBX/Stabbing_Anim.gif)
 
 <br/>
 
