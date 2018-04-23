@@ -2160,6 +2160,11 @@ HRESULT DirectX::CreateDDSTextureFromFile12(_In_ ID3D12Device* device,
 		return E_INVALIDARG;
 	}
 
+	/* DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(), 
+		mCommandList.Get(), 
+		stoneTex->Filename.c_str(),	
+		stoneTex->Resource, 
+		stoneTex->UploadHeap) */
 	DDS_HEADER* header = nullptr;
 	uint8_t* bitData = nullptr;
 	size_t bitSize = 0;

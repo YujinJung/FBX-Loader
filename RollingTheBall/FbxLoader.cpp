@@ -362,3 +362,4 @@ FbxAMatrix FbxLoader::GetGeometryTransformation(FbxNode* inNode)
 
 	return FbxAMatrix(lT, lR, lS);
 }
+

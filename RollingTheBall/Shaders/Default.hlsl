@@ -74,10 +74,10 @@ VertexOut VS(VertexIn vin)
 float4 PS(VertexOut pin) : SV_Target
 {
 	float4 diffuseAlbedo = gDiffuseMap.Sample(gsamAnisotropicWrap, pin.TexC) * gDiffuseAlbedo;
-
-#ifdef SKINNED
-	diffuseAlbedo = float4(pin.BoneIndices.x, pin.BoneIndices.y, pin.BoneIndices.z, pin.BoneIndices.w);
-#endif
+//
+//#ifdef SKINNED
+//	diffuseAlbedo = float4(pin.BoneIndices.x, pin.BoneIndices.y, pin.BoneIndices.z, pin.BoneIndices.w);
+//#endif
 	// interpolating normal can unnormalize it, so renormalize it.
 	pin.NormalW = normalize(pin.NormalW);
 

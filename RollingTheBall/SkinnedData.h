@@ -54,7 +54,6 @@ void printMatrix(const std::wstring& Name, const int& i, const DirectX::XMMATRIX
 class SkinnedData
 {
 public:
-
 	UINT BoneCount()const;
 
 	float GetClipStartTime(const std::string& clipName)const;

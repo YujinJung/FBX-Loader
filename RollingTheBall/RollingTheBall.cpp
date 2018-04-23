@@ -11,7 +11,6 @@
 #include "FrameResource.h"
 #include "FbxLoader.h"
 #include "RollingTheBall.h"
-#include <iostream>
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -50,7 +49,8 @@ RollingTheBall::~RollingTheBall()
 		FlushCommandQueue();
 }
 
-//-------------------------------------------------------------------------------------------------------------------------------
+
+///
 bool RollingTheBall::Initialize()
 {
 	if (!D3DApp::Initialize())
@@ -86,7 +86,6 @@ bool RollingTheBall::Initialize()
 	return true;
 }
 
-//-------------------------------------------------------------------------------------------------------------------------------
 void RollingTheBall::OnResize()
 {
 	D3DApp::OnResize();
@@ -203,6 +202,7 @@ void RollingTheBall::Draw(const GameTimer& gt)
 	// set until the GPU finishes processing all the commands prior to this Signal().
 	mCommandQueue->Signal(mFence.Get(), mCurrentFence);
 }
+
 
 void RollingTheBall::OnMouseDown(WPARAM btnState, int x, int y)
 {
@@ -323,6 +323,7 @@ void RollingTheBall::OnKeyboardInput(const GameTimer& gt)
 
 }
 
+
 void RollingTheBall::UpdateCamera(const GameTimer& gt)
 {
 	// Build the view matrix.
@@ -358,11 +359,6 @@ void RollingTheBall::UpdateObjectCBs(const GameTimer& gt)
 		}
 	}
 
-}
-
-void RollingTheBall::UpdateObjectShadows()
-{
-	
 }
 
 void RollingTheBall::UpdateMainPassCB(const GameTimer& gt)
@@ -439,52 +435,8 @@ void RollingTheBall::UpdateAnimationCBs(const GameTimer & gt)
 	currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
-//-------------------------------------------------------------------------------------------------------------------------------
-void RollingTheBall::LoadTextures()
-{
-	auto bricksTex = std::make_unique<Texture>();
-	bricksTex->Name = "bricksTex";
-	bricksTex->Filename = L"../Resource/Textures/bricks.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), bricksTex->Filename.c_str(),
-		bricksTex->Resource, bricksTex->UploadHeap));
 
-	auto bricks3Tex = std::make_unique<Texture>();
-	bricks3Tex->Name = "bricks3Tex";
-	bricks3Tex->Filename = L"../Resource/Textures/bricks3.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), bricks3Tex->Filename.c_str(),
-		bricks3Tex->Resource, bricks3Tex->UploadHeap));
-
-	auto stoneTex = std::make_unique<Texture>();
-	stoneTex->Name = "stoneTex";
-	stoneTex->Filename = L"../Resource/Textures/stone.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), stoneTex->Filename.c_str(),
-		stoneTex->Resource, stoneTex->UploadHeap));
-
-	auto grassTex = std::make_unique<Texture>();
-	grassTex->Name = "grassTex";
-	grassTex->Filename = L"../Resource/Textures/grass.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), grassTex->Filename.c_str(),
-		grassTex->Resource, grassTex->UploadHeap));
-
-
-	auto tileTex = std::make_unique<Texture>();
-	tileTex->Name = "tileTex";
-	tileTex->Filename = L"../Resource/Textures/tile.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), tileTex->Filename.c_str(),
-		tileTex->Resource, tileTex->UploadHeap));
-
-	mTextures[bricksTex->Name] = std::move(bricksTex);
-	mTextures[bricks3Tex->Name] = std::move(bricks3Tex);
-	mTextures[stoneTex->Name] = std::move(stoneTex);
-	mTextures[grassTex->Name] = std::move(grassTex);
-	mTextures[tileTex->Name] = std::move(tileTex);
-}
-
+///
 void RollingTheBall::BuildDescriptorHeaps()
 {
 	mObjCbvOffset = (UINT)mTextures.size();
@@ -500,7 +452,7 @@ void RollingTheBall::BuildDescriptorHeaps()
 	// Save an offset to the start of the pass CBVs.  These are the last 3 descriptors.
 	mMatCbvOffset = objCount * gNumFrameResources + mObjCbvOffset;
 	mPassCbvOffset = matCount * gNumFrameResources + mMatCbvOffset;
-	mSkinCbvOffset = skinCount * gNumFrameResources + mPassCbvOffset;
+	mSkinCbvOffset = 1 * gNumFrameResources + mPassCbvOffset;
 
 	// mPassCbvOffset + (passSize)
 	// passSize = 1 * gNumFrameResources
@@ -635,21 +587,27 @@ void RollingTheBall::BuildConstantBufferViews()
 
 	// Animation Skin
 	UINT skinnedCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(SkinnedConstants));
+	UINT skinnedCount = 36;
 	for (int frameIndex = 0; frameIndex < gNumFrameResources; ++frameIndex)
 	{
 		auto skinnedCB = mFrameResources[frameIndex]->SkinnedCB->Resource();
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddress = skinnedCB->GetGPUVirtualAddress();
+		for (UINT i = 0; i < skinnedCount; ++i)
+		{
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddress = skinnedCB->GetGPUVirtualAddress();
 
-		// Offset to the pass cbv in the descriptor heap.
-		int heapIndex = mSkinCbvOffset + frameIndex;
-		auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
-		handle.Offset(heapIndex, mCbvSrvDescriptorSize);
+			cbAddress += i * skinnedCBByteSize;
+			
+			// Offset to the pass cbv in the descriptor heap.
+			int heapIndex = mSkinCbvOffset + frameIndex * skinnedCount + i;
+			auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
+			handle.Offset(heapIndex, mCbvSrvDescriptorSize);
 
-		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
-		cbvDesc.BufferLocation = cbAddress;
-		cbvDesc.SizeInBytes = skinnedCBByteSize;
+			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+			cbvDesc.BufferLocation = cbAddress;
+			cbvDesc.SizeInBytes = skinnedCBByteSize;
 
-		md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+			md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+		}
 	}
 }
 
@@ -733,6 +691,136 @@ void RollingTheBall::BuildShadersAndInputLayout()
 	};
 }
 
+void RollingTheBall::BuildPSOs()
+{
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc;
+
+	//
+	// PSO for opaque objects.
+	//
+	ZeroMemory(&opaquePsoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
+	opaquePsoDesc.InputLayout = { mInputLayout.data(), (UINT)mInputLayout.size() };
+	opaquePsoDesc.pRootSignature = mRootSignature.Get();
+	opaquePsoDesc.VS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["standardVS"]->GetBufferPointer()),
+		mShaders["standardVS"]->GetBufferSize()
+	};
+	opaquePsoDesc.PS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["opaquePS"]->GetBufferPointer()),
+		mShaders["opaquePS"]->GetBufferSize()
+	};
+
+	opaquePsoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	opaquePsoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	opaquePsoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	opaquePsoDesc.SampleMask = UINT_MAX;
+	opaquePsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	opaquePsoDesc.NumRenderTargets = 1;
+	opaquePsoDesc.RTVFormats[0] = mBackBufferFormat;
+	opaquePsoDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
+	opaquePsoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
+	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
+
+	//
+	// PSO for skinned
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaquePsoDesc = opaquePsoDesc;
+	skinnedOpaquePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
+	skinnedOpaquePsoDesc.VS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
+		mShaders["skinnedVS"]->GetBufferSize()
+	};
+	skinnedOpaquePsoDesc.PS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
+		mShaders["skinnedPS"]->GetBufferSize()
+	};
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
+
+	// PSO for skinned wireframe objects.
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaqueWireframePsoDesc = opaquePsoDesc;
+	skinnedOpaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	skinnedOpaqueWireframePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
+	skinnedOpaqueWireframePsoDesc.VS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
+		mShaders["skinnedVS"]->GetBufferSize()
+	};
+	skinnedOpaqueWireframePsoDesc.PS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
+		mShaders["skinnedPS"]->GetBufferSize()
+	};
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque_wireframe"])));
+
+
+	//
+	// PSO for opaque wireframe objects.
+	//
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaqueWireframePsoDesc = opaquePsoDesc;
+	opaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
+
+	//
+	// Shadow
+
+	/*
+	// PSO for Shadow
+	D3D12_RENDER_TARGET_BLEND_DESC shadowBlendDesc;
+	shadowBlendDesc.BlendEnable = true;
+	shadowBlendDesc.LogicOpEnable = false;
+	shadowBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	shadowBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	shadowBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+	shadowBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
+	shadowBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
+	shadowBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	shadowBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
+	shadowBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	D3D12_DEPTH_STENCIL_DESC shadowDSS;
+	shadowDSS.DepthEnable = true;
+	shadowDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	shadowDSS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	shadowDSS.StencilEnable = true;
+	shadowDSS.StencilReadMask = 0xff;
+	shadowDSS.StencilWriteMask = 0xff;
+
+	shadowDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	shadowDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	shadowDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
+	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+
+	// We are not rendering backfacing polygons, so these settings do not matter.
+	shadowDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	shadowDSS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	shadowDSS.BackFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
+	shadowDSS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC shadowPsoDesc = opaquePsoDesc;
+	shadowPsoDesc.DepthStencilState = shadowDSS;
+	shadowPsoDesc.BlendState.RenderTarget[0] = shadowBlendDesc;
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&shadowPsoDesc, IID_PPV_ARGS(&mPSOs["shadow"])));
+	*/
+}
+
+void RollingTheBall::BuildFrameResources()
+{
+	for (int i = 0; i < gNumFrameResources; ++i)
+	{
+		mFrameResources.push_back(std::make_unique<FrameResource>(
+			md3dDevice.Get(),
+			1, (UINT)mAllRitems.size(),
+			(UINT)mMaterials.size(), 36));
+	}
+}
+
+
+///
 void RollingTheBall::BuildShapeGeometry()
 {
 	mMainLight.Direction = { 0.57735f, -0.57735f, 0.57735f };
@@ -906,14 +994,66 @@ void RollingTheBall::BuildFbxGeometry()
 	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
 
-	SubmeshGeometry FbxSubmesh;
-	FbxSubmesh.IndexCount = (UINT)outIndices.size();
-	FbxSubmesh.StartIndexLocation = 0;
-	FbxSubmesh.BaseVertexLocation = 0;
+	for (int i = 0; i < 36; ++i)
+	{
+		UINT c = (UINT)outIndices.size() / 3 / 36;
 
-	geo->DrawArgs["Fbx"] = FbxSubmesh;
+		SubmeshGeometry FbxSubmesh;
+		FbxSubmesh.IndexCount = c * 3;
+		FbxSubmesh.StartIndexLocation = c * i * 3;
+		FbxSubmesh.BaseVertexLocation = 0;
 
+		std::string t = "t";
+		t.push_back(i + 48);
+		geo->DrawArgs[t] = FbxSubmesh;
+	}
+	
 	mGeometries[geo->Name] = std::move(geo);
+}
+
+void RollingTheBall::LoadTextures()
+{
+	auto bricksTex = std::make_unique<Texture>();
+	bricksTex->Name = "bricksTex";
+	bricksTex->Filename = L"../Resource/Textures/bricks.dds";
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), bricksTex->Filename.c_str(),
+		bricksTex->Resource, bricksTex->UploadHeap));
+
+	auto bricks3Tex = std::make_unique<Texture>();
+	bricks3Tex->Name = "bricks3Tex";
+	bricks3Tex->Filename = L"../Resource/Textures/bricks3.dds";
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), bricks3Tex->Filename.c_str(),
+		bricks3Tex->Resource, bricks3Tex->UploadHeap));
+
+	auto stoneTex = std::make_unique<Texture>();
+	stoneTex->Name = "stoneTex";
+	stoneTex->Filename = L"../Resource/Textures/stone.dds";
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), stoneTex->Filename.c_str(),
+		stoneTex->Resource, stoneTex->UploadHeap));
+
+	auto grassTex = std::make_unique<Texture>();
+	grassTex->Name = "grassTex";
+	grassTex->Filename = L"../Resource/Textures/grass.dds";
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), grassTex->Filename.c_str(),
+		grassTex->Resource, grassTex->UploadHeap));
+
+
+	auto tileTex = std::make_unique<Texture>();
+	tileTex->Name = "tileTex";
+	tileTex->Filename = L"../Resource/Textures/tile.dds";
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), tileTex->Filename.c_str(),
+		tileTex->Resource, tileTex->UploadHeap));
+
+	mTextures[bricksTex->Name] = std::move(bricksTex);
+	mTextures[bricks3Tex->Name] = std::move(bricks3Tex);
+	mTextures[stoneTex->Name] = std::move(stoneTex);
+	mTextures[grassTex->Name] = std::move(grassTex);
+	mTextures[tileTex->Name] = std::move(tileTex);
 }
 
 void RollingTheBall::BuildMaterials()
@@ -974,135 +1114,43 @@ void RollingTheBall::BuildMaterials()
 	mMaterials["shadow0"] = std::move(shadow0);
 
 	// TODO : fbx material
+	UINT matCBIndex = 6;
+	auto m0 = std::make_unique<Material>();
+	m0->Name = "m0";
+	m0->MatCBIndex = matCBIndex++;
+	m0->DiffuseSrvHeapIndex = 1;
+	m0->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	m0->FresnelR0 = XMFLOAT3(0.02f, 0.02f, 0.02f);
+	m0->Roughness = 0.1f;
 
-}
+	auto m1 = std::make_unique<Material>();
+	m1->Name = "m1";
+	m1->MatCBIndex = matCBIndex++;
+	m1->DiffuseSrvHeapIndex = 2;
+	m1->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	m1->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
+	m1->Roughness = 0.3f;
 
-void RollingTheBall::BuildPSOs()
-{
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc;
+	auto m2 = std::make_unique<Material>();
+	m2->Name = "m2";
+	m2->MatCBIndex = matCBIndex++;
+	m2->DiffuseSrvHeapIndex = 3;
+	m2->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	m2->FresnelR0 = XMFLOAT3(0.02f, 0.02f, 0.02f);
+	m2->Roughness = 0.2f;
 
-	//
-	// PSO for opaque objects.
-	//
-	ZeroMemory(&opaquePsoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
-	opaquePsoDesc.InputLayout = { mInputLayout.data(), (UINT)mInputLayout.size() };
-	opaquePsoDesc.pRootSignature = mRootSignature.Get();
-	opaquePsoDesc.VS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["standardVS"]->GetBufferPointer()),
-		mShaders["standardVS"]->GetBufferSize()
-	};
-	opaquePsoDesc.PS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["opaquePS"]->GetBufferPointer()),
-		mShaders["opaquePS"]->GetBufferSize()
-	};
+	auto m3 = std::make_unique<Material>();
+	m3->Name = "m3";
+	m3->MatCBIndex = matCBIndex++;
+	m3->DiffuseSrvHeapIndex = 4;
+	m3->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	m3->FresnelR0 = XMFLOAT3(0.05f, 0.02f, 0.02f);
+	m3->Roughness = 0.1f;
 
-	opaquePsoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	opaquePsoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-	opaquePsoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-	opaquePsoDesc.SampleMask = UINT_MAX;
-	opaquePsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	opaquePsoDesc.NumRenderTargets = 1;
-	opaquePsoDesc.RTVFormats[0] = mBackBufferFormat;
-	opaquePsoDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
-	opaquePsoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
-	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
-
-	//
-	// PSO for skinned
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaquePsoDesc = opaquePsoDesc;
-	skinnedOpaquePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
-	skinnedOpaquePsoDesc.VS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
-		mShaders["skinnedVS"]->GetBufferSize()
-	};
-	skinnedOpaquePsoDesc.PS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
-		mShaders["skinnedPS"]->GetBufferSize()
-	};
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
-
-	// PSO for skinned wireframe objects.
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaqueWireframePsoDesc = opaquePsoDesc;
-	skinnedOpaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-	skinnedOpaqueWireframePsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
-	skinnedOpaqueWireframePsoDesc.VS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
-		mShaders["skinnedVS"]->GetBufferSize()
-	};
-	skinnedOpaqueWireframePsoDesc.PS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
-		mShaders["skinnedPS"]->GetBufferSize()
-	};
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque_wireframe"])));
-
-
-	//
-	// PSO for opaque wireframe objects.
-	//
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaqueWireframePsoDesc = opaquePsoDesc;
-	opaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
-
-	//
-	// Shadow
-
-	/*
-	// PSO for Shadow
-	D3D12_RENDER_TARGET_BLEND_DESC shadowBlendDesc;
-	shadowBlendDesc.BlendEnable = true;
-	shadowBlendDesc.LogicOpEnable = false;
-	shadowBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	shadowBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	shadowBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-	shadowBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-	shadowBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
-	shadowBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	shadowBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
-	shadowBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	D3D12_DEPTH_STENCIL_DESC shadowDSS;
-	shadowDSS.DepthEnable = true;
-	shadowDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	shadowDSS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-	shadowDSS.StencilEnable = true;
-	shadowDSS.StencilReadMask = 0xff;
-	shadowDSS.StencilWriteMask = 0xff;
-
-	shadowDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-	shadowDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	shadowDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
-	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-
-	// We are not rendering backfacing polygons, so these settings do not matter.
-	shadowDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-	shadowDSS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	shadowDSS.BackFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
-	shadowDSS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC shadowPsoDesc = opaquePsoDesc;
-	shadowPsoDesc.DepthStencilState = shadowDSS;
-	shadowPsoDesc.BlendState.RenderTarget[0] = shadowBlendDesc;
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&shadowPsoDesc, IID_PPV_ARGS(&mPSOs["shadow"])));
-	*/
-}
-
-void RollingTheBall::BuildFrameResources()
-{
-	for (int i = 0; i < gNumFrameResources; ++i)
-	{
-		mFrameResources.push_back(std::make_unique<FrameResource>(
-			md3dDevice.Get(),
-			1, (UINT)mAllRitems.size(),
-			(UINT)mMaterials.size(), 1));
-	}
+	mMaterials["m0"] = std::move(m0);
+	mMaterials["m1"] = std::move(m1);
+	mMaterials["m2"] = std::move(m2);
+	mMaterials["m3"] = std::move(m3);
 }
 
 void RollingTheBall::BuildRenderItems()
@@ -1122,22 +1170,31 @@ void RollingTheBall::BuildRenderItems()
 	mRitems[(int)RenderLayer::Opaque].push_back(gridRitem.get());
 	mAllRitems.push_back(std::move(gridRitem));
 
-	auto FbxRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f)*XMMatrixTranslation(0.0f, 2.0f, 0.0f));
-	FbxRitem->TexTransform = MathHelper::Identity4x4();
-	FbxRitem->ObjCBIndex = objCBIndex++;
-	FbxRitem->Mat = mMaterials["tile0"].get();
-	FbxRitem->Geo = mGeometries["FbxGeo"].get();
-	FbxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	FbxRitem->StartIndexLocation = FbxRitem->Geo->DrawArgs["Fbx"].StartIndexLocation;
-	FbxRitem->BaseVertexLocation = FbxRitem->Geo->DrawArgs["Fbx"].BaseVertexLocation;
-	FbxRitem->IndexCount = FbxRitem->Geo->DrawArgs["Fbx"].IndexCount;
 
-	FbxRitem->SkinnedCBIndex = 0;
-	FbxRitem->SkinnedModelInst = mSkinnedModelInst.get();
+	for (int i = 0; i < 36; ++i)
+	{
+		std::string SubmeshName = "t";
+		SubmeshName.push_back(i + 48);
+		std::string MaterialName = "m";
+		MaterialName.push_back(i % 4 + 48); // ASCII
 
-	mRitems[(int)RenderLayer::SkinnedOpaque].push_back(FbxRitem.get());
-	mAllRitems.push_back(std::move(FbxRitem));	
+		auto FbxRitem = std::make_unique<RenderItem>();
+		XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixTranslation(0.0f, 2.0f, 0.0f));
+		FbxRitem->TexTransform = MathHelper::Identity4x4();
+		FbxRitem->ObjCBIndex = objCBIndex++;
+		FbxRitem->Mat = mMaterials[MaterialName].get();
+		FbxRitem->Geo = mGeometries["FbxGeo"].get();
+		FbxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		FbxRitem->StartIndexLocation = FbxRitem->Geo->DrawArgs[SubmeshName].StartIndexLocation;
+		FbxRitem->BaseVertexLocation = FbxRitem->Geo->DrawArgs[SubmeshName].BaseVertexLocation;
+		FbxRitem->IndexCount = FbxRitem->Geo->DrawArgs[SubmeshName].IndexCount;
+
+		FbxRitem->SkinnedCBIndex = 0;
+		FbxRitem->SkinnedModelInst = mSkinnedModelInst.get();
+
+		mRitems[(int)RenderLayer::SkinnedOpaque].push_back(FbxRitem.get());
+		mAllRitems.push_back(std::move(FbxRitem));
+	}
 }
 
 void RollingTheBall::BuildObjectShadows()
@@ -1154,7 +1211,9 @@ void RollingTheBall::BuildObjectShadows()
 		e->NumFramesDirty = gNumFrameResources;
 	}
 }
-//-------------------------------------------------------------------------------------------------------------------------------
+
+
+///
 void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
 		// For each render item...
@@ -1197,7 +1256,6 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 		}
 }
 
-//-------------------------------------------------------------------------------------------------------------------------------
 std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> RollingTheBall::GetStaticSamplers()
 {
 	const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
