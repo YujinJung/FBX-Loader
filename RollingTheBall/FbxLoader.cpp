@@ -91,7 +91,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 				outSkinnedData.SetAnimationName(outAnimationName);
 
 				// Get Vertices and indices info
-				GetVerticesAndIndice(pMesh, outVertexVector, outIndexVector);
+				GetVerticesAndIndice(pMesh, outVertexVector, outIndexVector, outSkinnedData);
 
 				break;
 			
@@ -210,6 +210,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 				currBoneIndexAndWeight.vBoneWeight = pCurrCluster->GetControlPointWeights()[i];
 
 				mControlPoints[controlPointIndices[i]]->mBoneInfo.push_back(currBoneIndexAndWeight);
+				mControlPoints[controlPointIndices[i]]->mBoneName = currJointName;
 			}
 			
 			// Set the Bone Animation Matrix
@@ -264,88 +265,104 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 	mAnimations[outAnimationName] = animation;
 }
 
-void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex> & outVertexVector, std::vector<uint16_t> & outIndexVector)
+void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex> & outVertexVector, std::vector<uint16_t> & outIndexVector, SkinnedData& outSkinnedData)
 {
-	std::unordered_map<Vertex, uint16_t> indexMapping;
-	uint32_t vertexIndex = 0;
+	std::unordered_map<std::string, std::vector<uint16_t>> IndexVector;
+	std::unordered_map<Vertex, uint16_t> IndexMapping;
+	uint32_t VertexIndex = 0;
 
 	uint32_t tCount = pMesh->GetPolygonCount(); // Triangle
-	for (int j = 0; j < tCount; ++j)
+	for (int i = 0; i < tCount; ++i)
 	{
+		// For indexing by bone
+		std::string CurrBoneName = mControlPoints[pMesh->GetPolygonVertex(i, 0)]->mBoneName;
+
 		for (int k = 0; k < 3; ++k)
 		{
-			int controlPointIndex = pMesh->GetPolygonVertex(j, k);
-			CtrlPoint* currCtrlPoint = mControlPoints[controlPointIndex];
+			int controlPointIndex = pMesh->GetPolygonVertex(i, k);
+			CtrlPoint* CurrCtrlPoint = mControlPoints[controlPointIndex];
 
 			FbxVector4 pNormal;
-			pMesh->GetPolygonVertexNormal(j, k, pNormal);
+			pMesh->GetPolygonVertexNormal(i, k, pNormal);
 			
 			FbxVector2 pUVs;
 			bool bUnMappedUV;
-			pMesh->GetPolygonVertexUV(j, k, "", pUVs, bUnMappedUV);
+			pMesh->GetPolygonVertexUV(i, k, "", pUVs, bUnMappedUV);
 			
-			Vertex temp;
+			Vertex Temp;
 			// Position
-			temp.Pos.x = currCtrlPoint->mPosition.x;
-			temp.Pos.y = currCtrlPoint->mPosition.y;
-			temp.Pos.z = currCtrlPoint->mPosition.z;
+			Temp.Pos.x = CurrCtrlPoint->mPosition.x;
+			Temp.Pos.y = CurrCtrlPoint->mPosition.y;
+			Temp.Pos.z = CurrCtrlPoint->mPosition.z;
 
 			// Normal
-			temp.Normal.x = pNormal.mData[0];
-			temp.Normal.y = pNormal.mData[1];
-			temp.Normal.z = pNormal.mData[2];
+			Temp.Normal.x = pNormal.mData[0];
+			Temp.Normal.y = pNormal.mData[1];
+			Temp.Normal.z = pNormal.mData[2];
 
 			// UV
-			temp.TexC.x = pUVs.mData[0];
-			temp.TexC.y = pUVs.mData[1];
+			Temp.TexC.x = pUVs.mData[0];
+			Temp.TexC.y = pUVs.mData[1];
 
 			// push vertex and index
-			auto lookup = indexMapping.find(temp);
+			auto lookup = IndexMapping.find(Temp);
 
-			if (lookup != indexMapping.end())
+			if (lookup != IndexMapping.end())
 			{
-				outIndexVector.push_back(lookup->second);
+				IndexVector[CurrBoneName].push_back(lookup->second);
+				//outIndexVector.push_back(lookup->second);
 			}
 			else
 			{
 				// Index
-				uint16_t index = vertexIndex++;
-				indexMapping[temp] = index;
-				outIndexVector.push_back(index);
+				uint16_t Index = VertexIndex++;
+				IndexMapping[Temp] = Index;
+				IndexVector[CurrBoneName].push_back(Index);
+				//outIndexVector.push_back(Index);
 
 				// Vertex
-				SkinnedVertex skinnedVertexInfo;
-				skinnedVertexInfo.Pos = temp.Pos;
-				skinnedVertexInfo.Normal = temp.Normal;
-				skinnedVertexInfo.TexC = temp.TexC;
+				SkinnedVertex SkinnedVertexInfo;
+				SkinnedVertexInfo.Pos = Temp.Pos;
+				SkinnedVertexInfo.Normal = Temp.Normal;
+				SkinnedVertexInfo.TexC = Temp.TexC;
 
-				currCtrlPoint->SortBlendingInfoByWeight();
+				CurrCtrlPoint->SortBlendingInfoByWeight();
 
 				// Set the Bone information
-				for (int l = 0; l < currCtrlPoint->mBoneInfo.size(); ++l)
+				for (int l = 0; l < CurrCtrlPoint->mBoneInfo.size(); ++l)
 				{
 					if (l >= 4)
 						break;
 
-					skinnedVertexInfo.BoneIndices[l] = currCtrlPoint->mBoneInfo[l].vBoneIndices;
+					SkinnedVertexInfo.BoneIndices[l] = CurrCtrlPoint->mBoneInfo[l].vBoneIndices;
 
 					switch (l)
 					{
 					case 0:
-						skinnedVertexInfo.BoneWeights.x = currCtrlPoint->mBoneInfo[l].vBoneWeight;
+						SkinnedVertexInfo.BoneWeights.x = CurrCtrlPoint->mBoneInfo[l].vBoneWeight;
 						break;
 					case 1:
-						skinnedVertexInfo.BoneWeights.y = currCtrlPoint->mBoneInfo[l].vBoneWeight;
+						SkinnedVertexInfo.BoneWeights.y = CurrCtrlPoint->mBoneInfo[l].vBoneWeight;
 						break;
 					case 2:
-						skinnedVertexInfo.BoneWeights.z = currCtrlPoint->mBoneInfo[l].vBoneWeight;
+						SkinnedVertexInfo.BoneWeights.z = CurrCtrlPoint->mBoneInfo[l].vBoneWeight;
 						break;
 					}
 				}
 
-				outVertexVector.push_back(skinnedVertexInfo);
+				outVertexVector.push_back(SkinnedVertexInfo);
 			}
 		}
+	}
+
+	for (int i = 0; i < boneName.size(); ++i)
+	{
+		auto CurrIndexVector = IndexVector[boneName[i]];
+		int IndexCount = CurrIndexVector.size();
+
+		outSkinnedData.SetSubmeshOffset(IndexCount);
+
+		outIndexVector.insert(outIndexVector.end(), CurrIndexVector.begin(), CurrIndexVector.end());
 	}
 }
 

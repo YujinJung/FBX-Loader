@@ -158,7 +158,6 @@ private:
 	void BuildMaterials();
 	void BuildPSOs();
 	void BuildFrameResources();
-	void UpdateObjectShadows();
 	void BuildRenderItems();
 	void BuildObjectShadows();
 	void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);

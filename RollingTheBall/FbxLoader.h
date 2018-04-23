@@ -18,6 +18,7 @@ struct CtrlPoint
 {
 	DirectX::XMFLOAT3 mPosition;
 	std::vector<BoneIndexAndWeight> mBoneInfo;
+	std::string mBoneName;
 
 	CtrlPoint()
 	{
@@ -44,7 +45,7 @@ public:
 
 	void GetAnimation(FbxScene * pFbxScene, FbxNode * pFbxChildNode, std::string & outAnimationName);
 
-	void GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector);
+	void GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData & outSkinnedData);
 
 public:
 	FbxAMatrix GetGeometryTransformation(FbxNode * inNode);

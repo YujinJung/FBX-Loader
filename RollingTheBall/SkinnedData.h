@@ -63,8 +63,13 @@ public:
 		std::vector<int>& boneHierarchy,
 		std::vector<DirectX::XMFLOAT4X4>& boneOffsets,
 		std::unordered_map<std::string, AnimationClip>& animations);
+	
 	void SetAnimationName(const std::string& clipName);
 	std::string GetAnimationName(int num) const;
+
+	void SetSubmeshOffset(int num);
+
+	std::vector<int> GetSubmeshOffset() const;
 
 	// In a real project, you'd want to cache the result if there was a chance
 	// that you were calling this several times with the same clipName at 
@@ -82,4 +87,6 @@ private:
 
 	std::vector<std::string> mAnimationName;
 	std::unordered_map<std::string, AnimationClip> mAnimations;
+
+	std::vector<int> mSubmeshOffset;
 };

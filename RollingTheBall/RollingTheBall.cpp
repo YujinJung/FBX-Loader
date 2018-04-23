@@ -994,18 +994,28 @@ void RollingTheBall::BuildFbxGeometry()
 	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
 
-	for (int i = 0; i < 36; ++i)
+	auto vSubmeshOffset = mSkinnedInfo.GetSubmeshOffset();
+	for (int i = 0; i < vSubmeshOffset.size(); ++i)
 	{
-		UINT c = (UINT)outIndices.size() / 3 / 36;
+		/*UINT c = (UINT)outIndices.size() / 3 / 36;
 
 		SubmeshGeometry FbxSubmesh;
 		FbxSubmesh.IndexCount = c * 3;
 		FbxSubmesh.StartIndexLocation = c * i * 3;
+		FbxSubmesh.BaseVertexLocation = 0;*/
+		static UINT SubmeshOffsetIndex = 0;
+		UINT CurrSubmeshOffsetIndex = vSubmeshOffset[i];
+
+		SubmeshGeometry FbxSubmesh;
+		FbxSubmesh.IndexCount = CurrSubmeshOffsetIndex;
+		FbxSubmesh.StartIndexLocation = SubmeshOffsetIndex;
 		FbxSubmesh.BaseVertexLocation = 0;
 
 		std::string t = "t";
 		t.push_back(i + 48);
 		geo->DrawArgs[t] = FbxSubmesh;
+
+		SubmeshOffsetIndex += CurrSubmeshOffsetIndex;
 	}
 	
 	mGeometries[geo->Name] = std::move(geo);

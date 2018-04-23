@@ -146,6 +146,16 @@ std::string SkinnedData::GetAnimationName(int num) const
 	return mAnimationName.at(num);
 }
 
+void SkinnedData::SetSubmeshOffset(int num)
+{
+	mSubmeshOffset.push_back(num);
+}
+
+std::vector<int> SkinnedData::GetSubmeshOffset() const
+{
+	return mSubmeshOffset;
+}
+
 void SkinnedData::GetFinalTransforms(const std::string& clipName, float timePos, std::vector<XMFLOAT4X4>& finalTransforms)const
 {
 	UINT numBones = mBoneOffsets.size();

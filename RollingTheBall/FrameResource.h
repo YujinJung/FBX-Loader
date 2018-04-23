@@ -65,8 +65,6 @@ struct SkinnedVertex
 	DirectX::XMFLOAT3 BoneWeights;
 	BYTE BoneIndices[4];
 
-	BYTE BoneIndex;
-
 	/*bool operator==(const SkinnedVertex& other) const
 	{
 		if (Pos.x != other.Pos.x || Pos.y != other.Pos.y || Pos.z != other.Pos.z)
