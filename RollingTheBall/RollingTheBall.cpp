@@ -11,6 +11,7 @@
 #include "FrameResource.h"
 #include "FbxLoader.h"
 #include "RollingTheBall.h"
+#include "TextureLoader.h"
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -475,21 +476,33 @@ void RollingTheBall::BuildTextureBufferViews()
 	auto stoneTex = mTextures["stoneTex"]->Resource;
 	auto tileTex = mTextures["tileTex"]->Resource;
 	auto grassTex = mTextures["grassTex"]->Resource;
-
+	auto pngTex = mTextures["pngTex"]->Resource;
+	
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = bricksTex->GetDesc().Format;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MostDetailedMip = 0;
-	srvDesc.Texture2D.MipLevels = bricksTex->GetDesc().MipLevels;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	srvDesc.Format = bricksTex->GetDesc().Format;
+	srvDesc.Texture2D.MipLevels = bricksTex->GetDesc().MipLevels;
 	md3dDevice->CreateShaderResourceView(bricksTex.Get(), &srvDesc, hDescriptor);
+	
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> vTex;
+	vTex.push_back(mTextures["bricks3Tex"]->Resource);
+	vTex.push_back(mTextures["stoneTex"]->Resource);
+	vTex.push_back(mTextures["tileTex"]->Resource);
+	vTex.push_back(mTextures["grassTex"]->Resource);
+	vTex.push_back(mTextures["pngTex"]->Resource);
 
-	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+	for (auto &e : vTex)
+	{
+		hDescriptor.Offset(1, mCbvSrvDescriptorSize);
 
-	srvDesc.Format = bricks3Tex->GetDesc().Format;
-	srvDesc.Texture2D.MipLevels = bricks3Tex->GetDesc().MipLevels;
-	md3dDevice->CreateShaderResourceView(bricks3Tex.Get(), &srvDesc, hDescriptor);
+		srvDesc.Format = e->GetDesc().Format;
+		srvDesc.Texture2D.MipLevels = e->GetDesc().MipLevels;
+		md3dDevice->CreateShaderResourceView(e.Get(), &srvDesc, hDescriptor);
+	}
+	/*
 
 	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
 
@@ -508,6 +521,12 @@ void RollingTheBall::BuildTextureBufferViews()
 	srvDesc.Format = grassTex->GetDesc().Format;
 	srvDesc.Texture2D.MipLevels = grassTex->GetDesc().MipLevels;
 	md3dDevice->CreateShaderResourceView(grassTex.Get(), &srvDesc, hDescriptor);
+
+	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+
+	srvDesc.Format = pngTex->GetDesc().Format;
+	srvDesc.Texture2D.MipLevels = pngTex->GetDesc().MipLevels;
+	md3dDevice->CreateShaderResourceView(pngTex.Get(), &srvDesc, hDescriptor);*/
 }
 
 void RollingTheBall::BuildConstantBufferViews()
@@ -587,7 +606,7 @@ void RollingTheBall::BuildConstantBufferViews()
 
 	// Animation Skin
 	UINT skinnedCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(SkinnedConstants));
-	UINT skinnedCount = 36;
+	UINT skinnedCount = mSkinnedInfo.BoneCount() - 1;
 	for (int frameIndex = 0; frameIndex < gNumFrameResources; ++frameIndex)
 	{
 		auto skinnedCB = mFrameResources[frameIndex]->SkinnedCB->Resource();
@@ -1051,7 +1070,6 @@ void RollingTheBall::LoadTextures()
 		mCommandList.Get(), grassTex->Filename.c_str(),
 		grassTex->Resource, grassTex->UploadHeap));
 
-
 	auto tileTex = std::make_unique<Texture>();
 	tileTex->Name = "tileTex";
 	tileTex->Filename = L"../Resource/Textures/tile.dds";
@@ -1059,11 +1077,20 @@ void RollingTheBall::LoadTextures()
 		mCommandList.Get(), tileTex->Filename.c_str(),
 		tileTex->Resource, tileTex->UploadHeap));
 
+	auto pngTex = std::make_unique<Texture>();
+	pngTex->Name = "pngTex";
+	pngTex->Filename = L"../Resource/FBX/Boxing.fbm/Mutant_diffuse.png";
+	ThrowIfFailed(DirectX::CreateImageDataTextureFromFile(md3dDevice.Get(),
+		mCommandList.Get(), pngTex->Filename.c_str(),
+		pngTex->Resource, pngTex->UploadHeap));
+
+	mTextures[pngTex->Name] = std::move(pngTex);
 	mTextures[bricksTex->Name] = std::move(bricksTex);
 	mTextures[bricks3Tex->Name] = std::move(bricks3Tex);
 	mTextures[stoneTex->Name] = std::move(stoneTex);
 	mTextures[grassTex->Name] = std::move(grassTex);
 	mTextures[tileTex->Name] = std::move(tileTex);
+
 }
 
 void RollingTheBall::BuildMaterials()
@@ -1128,7 +1155,7 @@ void RollingTheBall::BuildMaterials()
 	auto m0 = std::make_unique<Material>();
 	m0->Name = "m0";
 	m0->MatCBIndex = matCBIndex++;
-	m0->DiffuseSrvHeapIndex = 1;
+	m0->DiffuseSrvHeapIndex = 5;
 	m0->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	m0->FresnelR0 = XMFLOAT3(0.02f, 0.02f, 0.02f);
 	m0->Roughness = 0.1f;
@@ -1136,7 +1163,7 @@ void RollingTheBall::BuildMaterials()
 	auto m1 = std::make_unique<Material>();
 	m1->Name = "m1";
 	m1->MatCBIndex = matCBIndex++;
-	m1->DiffuseSrvHeapIndex = 2;
+	m1->DiffuseSrvHeapIndex = 5;
 	m1->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	m1->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
 	m1->Roughness = 0.3f;
@@ -1144,7 +1171,7 @@ void RollingTheBall::BuildMaterials()
 	auto m2 = std::make_unique<Material>();
 	m2->Name = "m2";
 	m2->MatCBIndex = matCBIndex++;
-	m2->DiffuseSrvHeapIndex = 3;
+	m2->DiffuseSrvHeapIndex = 5;
 	m2->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	m2->FresnelR0 = XMFLOAT3(0.02f, 0.02f, 0.02f);
 	m2->Roughness = 0.2f;
@@ -1152,7 +1179,7 @@ void RollingTheBall::BuildMaterials()
 	auto m3 = std::make_unique<Material>();
 	m3->Name = "m3";
 	m3->MatCBIndex = matCBIndex++;
-	m3->DiffuseSrvHeapIndex = 4;
+	m3->DiffuseSrvHeapIndex = 5;
 	m3->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	m3->FresnelR0 = XMFLOAT3(0.05f, 0.02f, 0.02f);
 	m3->Roughness = 0.1f;

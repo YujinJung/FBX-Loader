@@ -50,7 +50,6 @@ public:
 public:
 	FbxAMatrix GetGeometryTransformation(FbxNode * inNode);
 
-
 private:
 	std::unordered_map<unsigned int, CtrlPoint*> mControlPoints;
 

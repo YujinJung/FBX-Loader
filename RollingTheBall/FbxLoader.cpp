@@ -27,7 +27,6 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 
 	FbxImporter* pImporter = FbxImporter::Create(gFbxManager, "");
 
-	//bool bSuccess = pImporter->Initialize("../Resource/cone.FBX", -1, gFbxManager->GetIOSettings());
 	bool bSuccess = pImporter->Initialize("../Resource/FBX/Boxing.FBX", -1, gFbxManager->GetIOSettings());
 	if (!bSuccess) return E_FAIL;
 

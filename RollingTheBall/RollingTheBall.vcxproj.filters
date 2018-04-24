@@ -31,6 +31,7 @@
     <ClCompile Include="SkinnedData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TextureLoader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\d3dApp.h">
@@ -72,6 +73,7 @@
     <ClInclude Include="SkinnedData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TextureLoader.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Header Files">

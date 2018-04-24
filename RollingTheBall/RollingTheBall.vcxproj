@@ -156,6 +156,7 @@
     <ClCompile Include="FrameResource.cpp" />
     <ClCompile Include="RollingTheBall.cpp" />
     <ClCompile Include="SkinnedData.cpp" />
+    <ClCompile Include="TextureLoader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\d3dApp.h" />
@@ -170,6 +171,7 @@
     <ClInclude Include="FrameResource.h" />
     <ClInclude Include="RollingTheBall.h" />
     <ClInclude Include="SkinnedData.h" />
+    <ClInclude Include="TextureLoader.h" />
     <ClInclude Include="vertexHash.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
