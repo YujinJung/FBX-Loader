@@ -37,9 +37,9 @@ public:
 	FbxLoader();
 	~FbxLoader();
 
-	HRESULT LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData);
+	HRESULT LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData & outSkinnedData, std::vector<Material>& outMaterial);
 
-	void GetSkeletonHierarchy(FbxNode * inNode, int curIndex, int parentIndex);
+	void GetSkeletonHierarchy(FbxNode * pNode, int curIndex, int parentIndex);
 
 	void GetControlPoints(fbxsdk::FbxNode * pFbxRootNode);
 
@@ -47,8 +47,13 @@ public:
 
 	void GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData & outSkinnedData);
 
-public:
-	FbxAMatrix GetGeometryTransformation(FbxNode * inNode);
+	FbxAMatrix GetGeometryTransformation(FbxNode * pNode);
+
+	void GetMaterials(FbxNode * pNode, std::vector<Material>& outMaterial);
+
+	void GetMaterialAttribute(FbxSurfaceMaterial * pMaterial, std::vector<Material>& outMaterial);
+
+	void GetMaterialTexture(FbxSurfaceMaterial * pMaterial, Material & Mat);
 
 private:
 	std::unordered_map<unsigned int, CtrlPoint*> mControlPoints;
@@ -56,6 +61,6 @@ private:
 	// skinnedData Output
 	std::vector<int> mBoneHierarchy;
 	std::vector<DirectX::XMFLOAT4X4> mBoneOffsets;
-	std::vector<std::string> boneName;
+	std::vector<std::string> mBoneName;
 	std::unordered_map<std::string, AnimationClip> mAnimations;
 };

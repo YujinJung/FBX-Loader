@@ -209,8 +209,7 @@ private:
 	* player - playerTarget
 	* a d - playerTarget Move(Yaw)
 	* w s - playerTarget, EyePos Move // EyeDirection based on playerTarget
-	* mouse left click - EyeTarget Move
-	* mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
+	* mouse click - EyeTarget Move
 	*/
 	const float mCameraRadius = 20.0f;
 	float mCameraPhi = XM_PIDIV2;
@@ -222,10 +221,10 @@ private:
 	RenderItem* mPlayerRitem = nullptr;
 
 	bool mViewDirty = false;
-	XMFLOAT3 mEyePos = { 0.0f, 30.0f, -30.0f };
+	XMFLOAT3 mEyePos = { -10.0f, 10.0f, 10.0f };
 	XMFLOAT3 mEyeTarget = { 0.0f, 0.0f, 0.0f };
 	XMFLOAT3 mEyeUp = { 0.0f, 1.0f, 0.0f };
-	XMFLOAT3 mEyeRight = { 1.0f, 0.0f, 0.0f };
+	XMFLOAT3 mEyeRight = { -0.5f, 0.0f, -0.5f };
 
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();
 	XMFLOAT4X4 mProj = MathHelper::Identity4x4();

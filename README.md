@@ -18,5 +18,7 @@
     - How to Work with FBX SDK 
         - [원문](https://www.gamedev.net/articles/programming/graphics/how-to-work-with-fbx-sdk-r3582) / [번역1](https://blog.naver.com/jidon333/220264337935), [번역2](https://blog.naver.com/jidon333/220264383892)
         
+- Texture Image Loader
+    - [Textures From File](https://www.braynzarsoft.net/viewtutorial/q16390-directx-12-textures-from-file)
 - Animation Data
     - [Mixamo](https://www.mixamo.com/#/)
