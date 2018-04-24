@@ -352,7 +352,7 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 
 			// UV
 			Temp.TexC.x = pUVs.mData[0];
-			Temp.TexC.y = pUVs.mData[1];
+			Temp.TexC.y = 1.0f - pUVs.mData[1];
 
 			// push vertex and index
 			auto lookup = IndexMapping.find(Temp);
