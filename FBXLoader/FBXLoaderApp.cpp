@@ -9,8 +9,8 @@
 #include "../Common/UploadBuffer.h"
 #include "../Common/GeometryGenerator.h"
 #include "FrameResource.h"
-#include "FbxLoader.h"
-#include "RollingTheBall.h"
+#include "FBXLoader.h"
+#include "FBXLoaderApp.h"
 #include "TextureLoader.h"
 
 // Lightweight structure stores parameters to draw a shape.  This will
@@ -26,7 +26,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 
 	try
 	{
-		RollingTheBall theApp(hInstance);
+		FBXLoaderApp theApp(hInstance);
 		if (!theApp.Initialize())
 			return 0;
 
@@ -39,20 +39,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 	}
 }
 
-RollingTheBall::RollingTheBall(HINSTANCE hInstance)
+FBXLoaderApp::FBXLoaderApp(HINSTANCE hInstance)
 	: D3DApp(hInstance)
 {
 }
 
-RollingTheBall::~RollingTheBall()
+FBXLoaderApp::~FBXLoaderApp()
 {
 	if (md3dDevice != nullptr)
 		FlushCommandQueue();
 }
 
-
 ///
-bool RollingTheBall::Initialize()
+bool FBXLoaderApp::Initialize()
 {
 	if (!D3DApp::Initialize())
 		return false;
@@ -87,7 +86,7 @@ bool RollingTheBall::Initialize()
 	return true;
 }
 
-void RollingTheBall::OnResize()
+void FBXLoaderApp::OnResize()
 {
 	D3DApp::OnResize();
 
@@ -96,7 +95,7 @@ void RollingTheBall::OnResize()
 	XMStoreFloat4x4(&mProj, P);
 }
 
-void RollingTheBall::Update(const GameTimer& gt)
+void FBXLoaderApp::Update(const GameTimer& gt)
 {
 	OnKeyboardInput(gt);
 	UpdateCamera(gt);
@@ -121,7 +120,7 @@ void RollingTheBall::Update(const GameTimer& gt)
 	UpdateMaterialCB(gt);
 }
 
-void RollingTheBall::Draw(const GameTimer& gt)
+void FBXLoaderApp::Draw(const GameTimer& gt)
 {
 	auto cmdListAlloc = mCurrFrameResource->CmdListAlloc;
 
@@ -205,7 +204,7 @@ void RollingTheBall::Draw(const GameTimer& gt)
 }
 
 
-void RollingTheBall::OnMouseDown(WPARAM btnState, int x, int y)
+void FBXLoaderApp::OnMouseDown(WPARAM btnState, int x, int y)
 {
 	mLastMousePos.x = x;
 	mLastMousePos.y = y;
@@ -213,12 +212,12 @@ void RollingTheBall::OnMouseDown(WPARAM btnState, int x, int y)
 	SetCapture(mhMainWnd);
 }
 
-void RollingTheBall::OnMouseUp(WPARAM btnState, int x, int y)
+void FBXLoaderApp::OnMouseUp(WPARAM btnState, int x, int y)
 {
 	ReleaseCapture();
 }
 
-void RollingTheBall::OnMouseMove(WPARAM btnState, int x, int y)
+void FBXLoaderApp::OnMouseMove(WPARAM btnState, int x, int y)
 {
 	XMVECTOR EyePos = XMLoadFloat3(&mEyePos);
 	XMVECTOR EyeTarget = XMLoadFloat3(&mEyeTarget);
@@ -275,7 +274,7 @@ void RollingTheBall::OnMouseMove(WPARAM btnState, int x, int y)
 	mLastMousePos.y = y;
 }
 
-void RollingTheBall::OnKeyboardInput(const GameTimer& gt)
+void FBXLoaderApp::OnKeyboardInput(const GameTimer& gt)
 {
 	if (GetAsyncKeyState('1') & 0x8000)
 		mIsWireframe = true;
@@ -325,7 +324,7 @@ void RollingTheBall::OnKeyboardInput(const GameTimer& gt)
 }
 
 
-void RollingTheBall::UpdateCamera(const GameTimer& gt)
+void FBXLoaderApp::UpdateCamera(const GameTimer& gt)
 {
 	// Build the view matrix.
 	XMVECTOR pos = XMLoadFloat3(&mEyePos);
@@ -336,7 +335,7 @@ void RollingTheBall::UpdateCamera(const GameTimer& gt)
 	XMStoreFloat4x4(&mView, view);
 }
 
-void RollingTheBall::UpdateObjectCBs(const GameTimer& gt)
+void FBXLoaderApp::UpdateObjectCBs(const GameTimer& gt)
 {
 	auto currObjectCB = mCurrFrameResource->ObjectCB.get();
 
@@ -362,7 +361,7 @@ void RollingTheBall::UpdateObjectCBs(const GameTimer& gt)
 
 }
 
-void RollingTheBall::UpdateMainPassCB(const GameTimer& gt)
+void FBXLoaderApp::UpdateMainPassCB(const GameTimer& gt)
 {
 	XMMATRIX view = XMLoadFloat4x4(&mView);
 	XMMATRIX proj = XMLoadFloat4x4(&mProj);
@@ -397,7 +396,7 @@ void RollingTheBall::UpdateMainPassCB(const GameTimer& gt)
 	currPassCB->CopyData(0, mMainPassCB);
 }
 
-void RollingTheBall::UpdateMaterialCB(const GameTimer & gt)
+void FBXLoaderApp::UpdateMaterialCB(const GameTimer & gt)
 {
 	auto currMaterialCB = mCurrFrameResource->MaterialCB.get();
 	for (auto& e : mMaterials)
@@ -420,7 +419,7 @@ void RollingTheBall::UpdateMaterialCB(const GameTimer & gt)
 	}
 }
 
-void RollingTheBall::UpdateAnimationCBs(const GameTimer & gt)
+void FBXLoaderApp::UpdateAnimationCBs(const GameTimer & gt)
 {
 	auto currSkinnedCB = mCurrFrameResource->SkinnedCB.get();
 
@@ -438,7 +437,7 @@ void RollingTheBall::UpdateAnimationCBs(const GameTimer & gt)
 
 
 ///
-void RollingTheBall::BuildDescriptorHeaps()
+void FBXLoaderApp::BuildDescriptorHeaps()
 {
 	mObjCbvOffset = (UINT)mTextures.size();
 	UINT objCount = (UINT)mAllRitems.size();
@@ -467,7 +466,7 @@ void RollingTheBall::BuildDescriptorHeaps()
 		IID_PPV_ARGS(&mCbvHeap)));
 }
 
-void RollingTheBall::BuildTextureBufferViews()
+void FBXLoaderApp::BuildTextureBufferViews()
 {
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
 
@@ -529,7 +528,7 @@ void RollingTheBall::BuildTextureBufferViews()
 	md3dDevice->CreateShaderResourceView(pngTex.Get(), &srvDesc, hDescriptor);*/
 }
 
-void RollingTheBall::BuildConstantBufferViews()
+void FBXLoaderApp::BuildConstantBufferViews()
 {
 	UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
 	UINT objCount = (UINT)mAllRitems.size();
@@ -630,7 +629,7 @@ void RollingTheBall::BuildConstantBufferViews()
 	}
 }
 
-void RollingTheBall::BuildRootSignature()
+void FBXLoaderApp::BuildRootSignature()
 {
 	CD3DX12_DESCRIPTOR_RANGE cbvTable[4];
 
@@ -680,7 +679,7 @@ void RollingTheBall::BuildRootSignature()
 
 }
 
-void RollingTheBall::BuildShadersAndInputLayout()
+void FBXLoaderApp::BuildShadersAndInputLayout()
 {
 	const D3D_SHADER_MACRO skinnedDefines[] =
 	{
@@ -710,7 +709,7 @@ void RollingTheBall::BuildShadersAndInputLayout()
 	};
 }
 
-void RollingTheBall::BuildPSOs()
+void FBXLoaderApp::BuildPSOs()
 {
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc;
 
@@ -784,50 +783,9 @@ void RollingTheBall::BuildPSOs()
 	opaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
 
-	//
-	// Shadow
-
-	/*
-	// PSO for Shadow
-	D3D12_RENDER_TARGET_BLEND_DESC shadowBlendDesc;
-	shadowBlendDesc.BlendEnable = true;
-	shadowBlendDesc.LogicOpEnable = false;
-	shadowBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	shadowBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	shadowBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-	shadowBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-	shadowBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
-	shadowBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	shadowBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
-	shadowBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	D3D12_DEPTH_STENCIL_DESC shadowDSS;
-	shadowDSS.DepthEnable = true;
-	shadowDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	shadowDSS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-	shadowDSS.StencilEnable = true;
-	shadowDSS.StencilReadMask = 0xff;
-	shadowDSS.StencilWriteMask = 0xff;
-
-	shadowDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-	shadowDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	shadowDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
-	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-
-	// We are not rendering backfacing polygons, so these settings do not matter.
-	shadowDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-	shadowDSS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	shadowDSS.BackFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
-	shadowDSS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC shadowPsoDesc = opaquePsoDesc;
-	shadowPsoDesc.DepthStencilState = shadowDSS;
-	shadowPsoDesc.BlendState.RenderTarget[0] = shadowBlendDesc;
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&shadowPsoDesc, IID_PPV_ARGS(&mPSOs["shadow"])));
-	*/
 }
 
-void RollingTheBall::BuildFrameResources()
+void FBXLoaderApp::BuildFrameResources()
 {
 	for (int i = 0; i < gNumFrameResources; ++i)
 	{
@@ -840,7 +798,7 @@ void RollingTheBall::BuildFrameResources()
 
 
 ///
-void RollingTheBall::BuildShapeGeometry()
+void FBXLoaderApp::BuildShapeGeometry()
 {
 	mMainLight.Direction = { 0.57735f, -0.57735f, 0.57735f };
 	mMainLight.Strength = { 0.6f, 0.6f, 0.6f };
@@ -969,7 +927,7 @@ void RollingTheBall::BuildShapeGeometry()
 	mGeometries[geo->Name] = std::move(geo);
 }
 
-void RollingTheBall::BuildFbxGeometry()
+void FBXLoaderApp::BuildFbxGeometry()
 {
 	FbxLoader fbx;
 
@@ -1040,7 +998,7 @@ void RollingTheBall::BuildFbxGeometry()
 	mGeometries[geo->Name] = std::move(geo);
 }
 
-void RollingTheBall::LoadTextures()
+void FBXLoaderApp::LoadTextures()
 {
 	auto bricksTex = std::make_unique<Texture>();
 	bricksTex->Name = "bricksTex";
@@ -1093,7 +1051,7 @@ void RollingTheBall::LoadTextures()
 
 }
 
-void RollingTheBall::BuildMaterials()
+void FBXLoaderApp::BuildMaterials()
 {
 	auto bricks0 = std::make_unique<Material>();
 	bricks0->Name = "bricks0";
@@ -1190,7 +1148,7 @@ void RollingTheBall::BuildMaterials()
 	mMaterials["m3"] = std::move(m3);
 }
 
-void RollingTheBall::BuildRenderItems()
+void FBXLoaderApp::BuildRenderItems()
 {
 	UINT objCBIndex = 0;
 
@@ -1234,7 +1192,7 @@ void RollingTheBall::BuildRenderItems()
 	}
 }
 
-void RollingTheBall::BuildObjectShadows()
+void FBXLoaderApp::BuildObjectShadows()
 {
 	for (auto& e : mRitems[(int)RenderLayer::Shadow])
 	{
@@ -1251,7 +1209,7 @@ void RollingTheBall::BuildObjectShadows()
 
 
 ///
-void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
+void FBXLoaderApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
 		// For each render item...
 		for (size_t i = 0; i < ritems.size(); ++i)
@@ -1293,7 +1251,7 @@ void RollingTheBall::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const s
 		}
 }
 
-std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> RollingTheBall::GetStaticSamplers()
+std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> FBXLoaderApp::GetStaticSamplers()
 {
 	const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
 		0, // shaderRegister

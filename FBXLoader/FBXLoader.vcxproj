@@ -154,7 +154,7 @@
     <ClCompile Include="DDSTextureLoader.cpp" />
     <ClCompile Include="FbxLoader.cpp" />
     <ClCompile Include="FrameResource.cpp" />
-    <ClCompile Include="RollingTheBall.cpp" />
+    <ClCompile Include="FBXLoaderApp.cpp" />
     <ClCompile Include="SkinnedData.cpp" />
     <ClCompile Include="TextureLoader.cpp" />
   </ItemGroup>
@@ -169,7 +169,7 @@
     <ClInclude Include="DDSTextureLoader.h" />
     <ClInclude Include="FbxLoader.h" />
     <ClInclude Include="FrameResource.h" />
-    <ClInclude Include="RollingTheBall.h" />
+    <ClInclude Include="FBXLoaderApp.h" />
     <ClInclude Include="SkinnedData.h" />
     <ClInclude Include="TextureLoader.h" />
     <ClInclude Include="vertexHash.h" />

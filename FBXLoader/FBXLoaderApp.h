@@ -120,13 +120,13 @@ enum class RenderLayer : int
 	Count
 };
 
-class RollingTheBall : public D3DApp
+class FBXLoaderApp : public D3DApp
 {
 public:
-	RollingTheBall(HINSTANCE hInstance);
-	RollingTheBall(const RollingTheBall& rhs) = delete;
-	RollingTheBall& operator=(const RollingTheBall& rhs) = delete;
-	~RollingTheBall();
+	FBXLoaderApp(HINSTANCE hInstance);
+	FBXLoaderApp(const FBXLoaderApp& rhs) = delete;
+	FBXLoaderApp& operator=(const FBXLoaderApp& rhs) = delete;
+	~FBXLoaderApp();
 
 	virtual bool Initialize()override;
 
