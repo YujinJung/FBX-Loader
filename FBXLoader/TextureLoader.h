@@ -17,5 +17,4 @@ namespace DirectX
 	int LoadImageDataFromFile(BYTE ** imageData, D3D12_RESOURCE_DESC & textureDesc, LPCWSTR filename, int & bytesPerRow);
 
 	HRESULT CreateImageDataTextureFromFile(ID3D12Device * device, ID3D12GraphicsCommandList * cmdList, const wchar_t * szFileName, Microsoft::WRL::ComPtr<ID3D12Resource>& texture, Microsoft::WRL::ComPtr<ID3D12Resource>& textureUploadHeap);
-
 }

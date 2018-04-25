@@ -146,6 +146,8 @@ private:
 	void UpdateMainPassCB(const GameTimer& gt);
 	void UpdateMaterialCB(const GameTimer& gt);
 	void UpdateAnimationCBs(const GameTimer & gt);
+	void UpdateObjectShadows(const GameTimer & gt);
+	void UpdateSkinnedShadowCBs(const GameTimer & gt, const std::vector<DirectX::XMFLOAT4X4> FinalTransforms);
 
 	void LoadTextures();
 	void BuildDescriptorHeaps();

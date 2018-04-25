@@ -1,5 +1,9 @@
 //***************************************************************************************
 // ShapesApp.cpp by Frank Luna (C) 2015 All Rights Reserved.
+// 
+// FBXLoaderApp.cpp by Yujin Jung
+// 
+// Hold down '2' key to view FBX model in wireframe mode
 //
 // Hold down '1' key to view scene in wireframe mode.
 //***************************************************************************************
@@ -117,6 +121,7 @@ void FBXLoaderApp::Update(const GameTimer& gt)
 	UpdateObjectCBs(gt);
 	UpdateAnimationCBs(gt);
 	UpdateMainPassCB(gt);
+	UpdateObjectShadows(gt);
 	UpdateMaterialCB(gt);
 }
 
@@ -175,9 +180,9 @@ void FBXLoaderApp::Draw(const GameTimer& gt)
 	}
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
 
-	/*mCommandList->OMSetStencilRef(0);
-	mCommandList->SetPipelineState(mPSOs["shadow"].Get());
-	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Shadow]);*/
+	mCommandList->OMSetStencilRef(0);
+	mCommandList->SetPipelineState(mPSOs["skinned_shadow"].Get());
+	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::Shadow]);
 
 	// Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -435,6 +440,45 @@ void FBXLoaderApp::UpdateAnimationCBs(const GameTimer & gt)
 	currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
+void FBXLoaderApp::UpdateObjectShadows(const GameTimer& gt)
+{
+	int i = 0;
+	for (auto& e : mRitems[(int)RenderLayer::Shadow])
+	{
+		// Load the object world
+		auto& o = mRitems[(int)RenderLayer::SkinnedOpaque][i];
+		XMMATRIX shadowWorld = XMLoadFloat4x4(&o->World);
+
+		XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+		XMVECTOR toMainLight = -XMLoadFloat3(&mMainLight.Direction);
+		XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
+		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
+		XMStoreFloat4x4(&e->World, shadowWorld * S * shadowOffsetY);
+		e->NumFramesDirty = gNumFrameResources;
+
+		++i;
+	}
+}
+
+//void FBXLoaderApp::UpdateSkinnedShadowCBs(const GameTimer & gt, const std::vector<DirectX::XMFLOAT4X4> FinalTransforms)
+//{
+//	int i = 0;
+//	for (auto& e : mRitems[(int)RenderLayer::Shadow])
+//	{
+//		// Load the object world
+//		auto& o = mRitems[(int)RenderLayer::SkinnedOpaque][i];
+//		XMMATRIX shadowWorld = XMLoadFloat4x4(&o->World) * XMLoadFloat4x4(&FinalTransforms[i]);
+//
+//		XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+//		XMVECTOR toMainLight = -XMLoadFloat3(&mMainLight.Direction);
+//		XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
+//		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
+//		XMStoreFloat4x4(&e->World, shadowWorld * S * shadowOffsetY);
+//		e->NumFramesDirty = gNumFrameResources;
+//
+//		++i;
+//	}
+//}
 
 ///
 void FBXLoaderApp::BuildDescriptorHeaps()
@@ -753,6 +797,59 @@ void FBXLoaderApp::BuildPSOs()
 	opaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
 
+	// PSO for Shadow
+	D3D12_RENDER_TARGET_BLEND_DESC shadowBlendDesc;
+	shadowBlendDesc.BlendEnable = true;
+	shadowBlendDesc.LogicOpEnable = false;
+	shadowBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	shadowBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	shadowBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+	shadowBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
+	shadowBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
+	shadowBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	shadowBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
+	shadowBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	D3D12_DEPTH_STENCIL_DESC shadowDSS;
+	shadowDSS.DepthEnable = true;
+	shadowDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	shadowDSS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	shadowDSS.StencilEnable = true;
+	shadowDSS.StencilReadMask = 0xff;
+	shadowDSS.StencilWriteMask = 0xff;
+
+	shadowDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	shadowDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	shadowDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
+	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+
+	// We are not rendering backfacing polygons, so these settings do not matter.
+	shadowDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	shadowDSS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	shadowDSS.BackFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
+	shadowDSS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC shadowPsoDesc = opaquePsoDesc;
+	shadowPsoDesc.DepthStencilState = shadowDSS;
+	shadowPsoDesc.BlendState.RenderTarget[0] = shadowBlendDesc;
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&shadowPsoDesc, IID_PPV_ARGS(&mPSOs["shadow"])));
+
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedShadowPsoDesc = shadowPsoDesc;
+	skinnedShadowPsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
+	skinnedShadowPsoDesc.VS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedVS"]->GetBufferPointer()),
+		mShaders["skinnedVS"]->GetBufferSize()
+	};
+	skinnedShadowPsoDesc.PS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["skinnedPS"]->GetBufferPointer()),
+		mShaders["skinnedPS"]->GetBufferSize()
+	};
+	skinnedShadowPsoDesc.DepthStencilState = shadowDSS;
+	skinnedShadowPsoDesc.BlendState.RenderTarget[0] = shadowBlendDesc;
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedShadowPsoDesc, IID_PPV_ARGS(&mPSOs["skinned_shadow"])));
 }
 
 void FBXLoaderApp::BuildFrameResources()
@@ -1122,8 +1219,8 @@ void FBXLoaderApp::BuildRenderItems()
 	mRitems[(int)RenderLayer::Opaque].push_back(gridRitem.get());
 	mAllRitems.push_back(std::move(gridRitem));
 
-
-	for (int i = 0; i < 36; ++i)
+	int BoneCount = mSkinnedInfo.BoneCount();
+	for (int i = 0; i < BoneCount - 1; ++i)
 	{
 		std::string SubmeshName = "submesh_";
 		SubmeshName.push_back(i + 48); // ASCII
@@ -1131,7 +1228,7 @@ void FBXLoaderApp::BuildRenderItems()
 		// TODO : Setting the Name
 
 		auto FbxRitem = std::make_unique<RenderItem>();
-		XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixTranslation(0.0f, 2.0f, 0.0f));
+		XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f));
 		//XMStoreFloat4x4(&FbxRitem->TexTransform, XMMatrixScaling(0.5f, 0.2f, 0.1f));
 		FbxRitem->TexTransform = MathHelper::Identity4x4();
 		FbxRitem->ObjCBIndex = objCBIndex++;
@@ -1148,11 +1245,31 @@ void FBXLoaderApp::BuildRenderItems()
 		mRitems[(int)RenderLayer::SkinnedOpaque].push_back(FbxRitem.get());
 		mAllRitems.push_back(std::move(FbxRitem));
 	}
+
+	for(auto& e : mRitems[(int)RenderLayer::SkinnedOpaque])
+	{
+		//auto& e = mAllRitems.at(i);
+		//mRitems[(int)RenderLayer::Opaque].push_back(e.get());
+		// Skip the Grid shadow
+		//if (i == 0) continue;
+
+		auto shadowedObjectRitem = std::make_unique<RenderItem>();
+		*shadowedObjectRitem = *e;
+		shadowedObjectRitem->ObjCBIndex = objCBIndex++;
+		shadowedObjectRitem->Mat = mMaterials["shadow0"].get();
+		shadowedObjectRitem->NumFramesDirty = gNumFrameResources;
+
+		shadowedObjectRitem->SkinnedCBIndex = 0;
+		shadowedObjectRitem->SkinnedModelInst = mSkinnedModelInst.get();
+
+		mRitems[(int)RenderLayer::Shadow].push_back(shadowedObjectRitem.get());
+		mAllRitems.push_back(std::move(shadowedObjectRitem));
+	}
 }
 
 void FBXLoaderApp::BuildObjectShadows()
 {
-	for (auto& e : mRitems[(int)RenderLayer::Shadow])
+	/*for (auto& e : mRitems[(int)RenderLayer::Shadow])
 	{
 		XMMATRIX world = XMLoadFloat4x4(&e->World);
 
@@ -1162,51 +1279,51 @@ void FBXLoaderApp::BuildObjectShadows()
 		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
 		XMStoreFloat4x4(&e->World, world * S * shadowOffsetY);
 		e->NumFramesDirty = gNumFrameResources;
-	}
+	}*/
 }
 
 
 ///
 void FBXLoaderApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
-		// For each render item...
-		for (size_t i = 0; i < ritems.size(); ++i)
+	// For each render item...
+	for (size_t i = 0; i < ritems.size(); ++i)
+	{
+		auto ri = ritems[i];
+
+		cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
+		cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
+		cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
+
+		// Offset to the CBV in the descriptor heap for this object and for this frame resource.
+		// ri->ObjCBIndex = object number 0, 1, 2, --- , n
+		// frame size  +  ��ü index
+		CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+		tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
+
+		UINT cbvIndex = mObjCbvOffset + mCurrFrameResourceIndex * (UINT)mAllRitems.size() + ri->ObjCBIndex;
+		auto cbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+		cbvHandle.Offset(cbvIndex, mCbvSrvDescriptorSize);
+
+		UINT matCbvIndex = mMatCbvOffset + mCurrFrameResourceIndex * (UINT)mMaterials.size() + ri->Mat->MatCBIndex;
+		auto matCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+		matCbvHandle.Offset(matCbvIndex, mCbvSrvDescriptorSize);
+
+		cmdList->SetGraphicsRootDescriptorTable(0, tex);
+		cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
+		cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
+
+		UINT skinnedIndex = mSkinCbvOffset + mCurrFrameResourceIndex * (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size() + ri->SkinnedCBIndex;
+		auto skinCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+		skinCbvHandle.Offset(skinnedIndex, mCbvSrvDescriptorSize);
+
+		if (ri->SkinnedModelInst != nullptr)
 		{
-			auto ri = ritems[i];
-
-			cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
-			cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
-			cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
-
-			// Offset to the CBV in the descriptor heap for this object and for this frame resource.
-			// ri->ObjCBIndex = object number 0, 1, 2, --- , n
-			// frame size  +  ��ü index
-			CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-			tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
-
-			UINT cbvIndex = mObjCbvOffset + mCurrFrameResourceIndex * (UINT)mAllRitems.size() + ri->ObjCBIndex;
-			auto cbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-			cbvHandle.Offset(cbvIndex, mCbvSrvDescriptorSize);
-
-			UINT matCbvIndex = mMatCbvOffset + mCurrFrameResourceIndex * (UINT)mMaterials.size() + ri->Mat->MatCBIndex;
-			auto matCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-			matCbvHandle.Offset(matCbvIndex, mCbvSrvDescriptorSize);
-
-			cmdList->SetGraphicsRootDescriptorTable(0, tex);
-			cmdList->SetGraphicsRootDescriptorTable(1, cbvHandle);
-			cmdList->SetGraphicsRootDescriptorTable(2, matCbvHandle);
-
-			UINT skinnedIndex = mSkinCbvOffset + mCurrFrameResourceIndex * (UINT)mRitems[(int)RenderLayer::SkinnedOpaque].size() + ri->SkinnedCBIndex;
-			auto skinCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-			skinCbvHandle.Offset(skinnedIndex, mCbvSrvDescriptorSize);
-
-			if (ri->SkinnedModelInst != nullptr)
-			{
-				cmdList->SetGraphicsRootDescriptorTable(4, skinCbvHandle);
-			}
-
-			cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
+			cmdList->SetGraphicsRootDescriptorTable(4, skinCbvHandle);
 		}
+
+		cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
+	}
 }
 
 std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> FBXLoaderApp::GetStaticSamplers()
