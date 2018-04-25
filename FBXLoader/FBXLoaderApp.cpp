@@ -7,18 +7,7 @@
 //
 // Hold down '1' key to view scene in wireframe mode.
 //***************************************************************************************
-
-#include "../Common/d3dApp.h"
-#include "../Common/MathHelper.h"
-#include "../Common/UploadBuffer.h"
-#include "../Common/GeometryGenerator.h"
-#include "FrameResource.h"
-#include "FBXLoader.h"
 #include "FBXLoaderApp.h"
-#include "TextureLoader.h"
-
-// Lightweight structure stores parameters to draw a shape.  This will
-// vary from app-to-app.
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 	PSTR cmdLine, int showCmd)
@@ -95,14 +84,13 @@ void FBXLoaderApp::OnResize()
 	D3DApp::OnResize();
 
 	// The window resized, so update the aspect ratio and recompute the projection matrix.
-	XMMATRIX P = XMMatrixPerspectiveFovLH(0.25f*MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
-	XMStoreFloat4x4(&mProj, P);
+	//XMMATRIX P = XMMatrixPerspectiveFovLH(0.25f*MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
+	mCamera.SetProj(0.25f*MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
 }
 
 void FBXLoaderApp::Update(const GameTimer& gt)
 {
 	OnKeyboardInput(gt);
-	UpdateCamera(gt);
 
 	// Cycle through the circular frame resource array.
 	mCurrFrameResourceIndex = (mCurrFrameResourceIndex + 1) % gNumFrameResources;
@@ -224,56 +212,19 @@ void FBXLoaderApp::OnMouseUp(WPARAM btnState, int x, int y)
 
 void FBXLoaderApp::OnMouseMove(WPARAM btnState, int x, int y)
 {
-	XMVECTOR EyePos = XMLoadFloat3(&mEyePos);
-	XMVECTOR EyeTarget = XMLoadFloat3(&mEyeTarget);
-	XMVECTOR EyeRight = XMLoadFloat3(&mEyeRight);
-	XMVECTOR EyeUp = XMLoadFloat3(&mEyeUp);
-	XMVECTOR EyeDirection = XMVector3Normalize(XMVectorSubtract(EyeTarget, EyePos));
-
-	float dx = XMConvertToRadians(0.5f*static_cast<float>(x - mLastMousePos.x));
-	float dy = XMConvertToRadians(0.5f*static_cast<float>(y - mLastMousePos.y));
+	float dx = XMConvertToRadians(0.25f*static_cast<float>(x - mLastMousePos.x));
+	float dy = XMConvertToRadians(0.25f*static_cast<float>(y - mLastMousePos.y));
 
 	if ((btnState & MK_LBUTTON) != 0)
 	{
-		// Update angles based on input to orbit camera around box.
-		mCameraTheta += dx;
-		mCameraPhi += dy;
-		mCameraPhi = MathHelper::Clamp(mCameraPhi, 0.1f, MathHelper::Pi - 0.1f);
-
-		if (mCameraTheta > XM_PI)
-			mCameraTheta -= XM_2PI;
-		else if (mCameraTheta < -XM_PI)
-			mCameraTheta += XM_2PI;
-
-		XMVECTOR t = XMVectorSet(std::sinf(mCameraTheta), 1.0f, std::cosf(mCameraTheta), 0.0f);
-		XMVECTOR p = XMVectorSet(std::sinf(mCameraPhi), std::cosf(mCameraPhi), std::sinf(mCameraPhi), 0.0f);
-		XMVECTOR r = XMVectorSet(mCameraRadius, mCameraRadius, mCameraRadius, 0.0f);
-
-		EyeTarget = XMVectorMultiplyAdd(XMVectorMultiply(t, p), r, EyePos);
-		EyeRight = XMVector3Normalize(XMVector3Cross(EyeUp, EyeDirection));
+		mCamera.AddPitch(dy);
+		mCamera.AddYaw(dx);
 	}
 	else if ((btnState & MK_RBUTTON) != 0)
 	{
-		// Update angles based on input to orbit camera around box.
-		mCameraTheta += dx;
-		mCameraPhi += dy;
-		mCameraPhi = MathHelper::Clamp(mCameraPhi, 0.1f, MathHelper::Pi - 0.1f);
-
-		if (mCameraTheta > XM_PI)
-			mCameraTheta -= XM_2PI;
-		else if (mCameraTheta < -XM_PI)
-			mCameraTheta += XM_2PI;
-
-		XMVECTOR t = XMVectorSet(std::sinf(mCameraTheta), 1.0f, std::cosf(mCameraTheta), 0.0f);
-		XMVECTOR p = XMVectorSet(std::sinf(mCameraPhi), std::cosf(mCameraPhi), std::sinf(mCameraPhi), 0.0f);
-		XMVECTOR r = XMVectorSet(mCameraRadius, mCameraRadius, mCameraRadius, 0.0f);
-
-		EyeTarget = XMVectorMultiplyAdd(XMVectorMultiply(t, p), r, EyePos);
-		EyeRight = XMVector3Normalize(XMVector3Cross(EyeUp, EyeDirection));
+		mCamera.AddPitch(dy);
+		mCamera.AddYaw(dx);
 	}
-
-	XMStoreFloat3(&mEyeTarget, EyeTarget);
-	XMStoreFloat3(&mEyeRight, EyeRight);
 
 	mLastMousePos.x = x;
 	mLastMousePos.y = y;
@@ -281,6 +232,8 @@ void FBXLoaderApp::OnMouseMove(WPARAM btnState, int x, int y)
 
 void FBXLoaderApp::OnKeyboardInput(const GameTimer& gt)
 {
+	const float dt = gt.DeltaTime();
+
 	if (GetAsyncKeyState('1') & 0x8000)
 		mIsWireframe = true;
 	else if (GetAsyncKeyState('2') & 0x8000)
@@ -291,53 +244,25 @@ void FBXLoaderApp::OnKeyboardInput(const GameTimer& gt)
 		mFbxWireframe = false;
 	}
 
-	XMVECTOR EyePos = XMLoadFloat3(&mEyePos);
-	XMVECTOR EyeTarget = XMLoadFloat3(&mEyeTarget);
-	XMVECTOR EyeRight = XMLoadFloat3(&mEyeRight);
-	XMVECTOR EyeDirection = XMVector3Normalize(XMVectorSubtract(EyeTarget, EyePos));
-
-	XMVECTOR ResizeVector = XMVectorSet(0.01f, 0.01f, 0.01f, 0.0f);
-	EyeDirection = XMVectorMultiply(EyeDirection, ResizeVector);
-	EyeRight = XMVectorMultiply(EyeRight, ResizeVector);
-
-
 	if (GetAsyncKeyState('W') & 0x8000)
 	{
-		EyePos = XMVectorAdd(EyePos, EyeDirection);
-		EyeTarget = XMVectorAdd(EyeTarget, EyeDirection);
+		mCamera.Walk(10.0f * dt);
 	}
 	else if (GetAsyncKeyState('S') & 0x8000) 
 	{
-		EyePos = XMVectorAdd(EyePos, -EyeDirection);
-		EyeTarget = XMVectorAdd(EyeTarget, -EyeDirection);
+		mCamera.Walk(-10.0f * dt);
 	}
 
 	if (GetAsyncKeyState('A') & 0x8000)
 	{
-		EyePos = XMVectorAdd(EyePos, -EyeRight);
-		EyeTarget = XMVectorAdd(EyeTarget, -EyeRight);
+		mCamera.WalkSideway(-10.0f * dt);
 	}
 	else if (GetAsyncKeyState('D') & 0x8000)
 	{
-		EyePos = XMVectorAdd(EyePos, EyeRight);
-		EyeTarget = XMVectorAdd(EyeTarget, EyeRight);
+		mCamera.WalkSideway(10.0f * dt);
 	}
 
-	XMStoreFloat3(&mEyePos, EyePos);
-	XMStoreFloat3(&mEyeTarget, EyeTarget);
-
-}
-
-
-void FBXLoaderApp::UpdateCamera(const GameTimer& gt)
-{
-	// Build the view matrix.
-	XMVECTOR pos = XMLoadFloat3(&mEyePos);
-	XMVECTOR target = XMLoadFloat3(&mEyeTarget);
-	XMVECTOR up= XMLoadFloat3(&mEyeUp);
-
-	XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
-	XMStoreFloat4x4(&mView, view);
+	mCamera.UpdateViewMatrix();
 }
 
 void FBXLoaderApp::UpdateObjectCBs(const GameTimer& gt)
@@ -368,8 +293,8 @@ void FBXLoaderApp::UpdateObjectCBs(const GameTimer& gt)
 
 void FBXLoaderApp::UpdateMainPassCB(const GameTimer& gt)
 {
-	XMMATRIX view = XMLoadFloat4x4(&mView);
-	XMMATRIX proj = XMLoadFloat4x4(&mProj);
+	XMMATRIX view = mCamera.GetView();
+	XMMATRIX proj = mCamera.GetProj();
 
 	XMMATRIX viewProj = XMMatrixMultiply(view, proj);
 	XMMATRIX invView = XMMatrixInverse(&XMMatrixDeterminant(view), view);
@@ -382,7 +307,7 @@ void FBXLoaderApp::UpdateMainPassCB(const GameTimer& gt)
 	XMStoreFloat4x4(&mMainPassCB.InvProj, XMMatrixTranspose(invProj));
 	XMStoreFloat4x4(&mMainPassCB.ViewProj, XMMatrixTranspose(viewProj));
 	XMStoreFloat4x4(&mMainPassCB.InvViewProj, XMMatrixTranspose(invViewProj));
-	mMainPassCB.EyePosW = mEyePos;
+	mMainPassCB.EyePosW = mCamera.GetEyePosition3f();
 	mMainPassCB.RenderTargetSize = XMFLOAT2((float)mClientWidth, (float)mClientHeight);
 	mMainPassCB.InvRenderTargetSize = XMFLOAT2(1.0f / mClientWidth, 1.0f / mClientHeight);
 	mMainPassCB.NearZ = 1.0f;
@@ -1229,7 +1154,6 @@ void FBXLoaderApp::BuildRenderItems()
 
 		auto FbxRitem = std::make_unique<RenderItem>();
 		XMStoreFloat4x4(&FbxRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f));
-		//XMStoreFloat4x4(&FbxRitem->TexTransform, XMMatrixScaling(0.5f, 0.2f, 0.1f));
 		FbxRitem->TexTransform = MathHelper::Identity4x4();
 		FbxRitem->ObjCBIndex = objCBIndex++;
 		FbxRitem->Mat = mMaterials[MaterialName].get();

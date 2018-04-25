@@ -1,6 +1,14 @@
 #pragma once
 
+#include "../Common/d3dApp.h"
+#include "../Common/MathHelper.h"
+#include "../Common/UploadBuffer.h"
+#include "../Common/GeometryGenerator.h"
+#include "Camera.h"
+#include "FrameResource.h"
+#include "FBXLoader.h"
 #include "SkinnedData.h"
+#include "TextureLoader.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -141,13 +149,11 @@ private:
 
 	void OnKeyboardInput(const GameTimer& gt);
 
-	void UpdateCamera(const GameTimer& gt);
 	void UpdateObjectCBs(const GameTimer& gt);
 	void UpdateMainPassCB(const GameTimer& gt);
 	void UpdateMaterialCB(const GameTimer& gt);
 	void UpdateAnimationCBs(const GameTimer & gt);
 	void UpdateObjectShadows(const GameTimer & gt);
-	void UpdateSkinnedShadowCBs(const GameTimer & gt, const std::vector<DirectX::XMFLOAT4X4> FinalTransforms);
 
 	void LoadTextures();
 	void BuildDescriptorHeaps();
@@ -183,10 +189,8 @@ private:
 	std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> mSkinnedInputLayout;
 
-	// For FBX
-	UINT mSkinnedSrvHeapStart = 0;
-	std::unique_ptr<SkinnedModelInstance> mSkinnedModelInst;
-	SkinnedData mSkinnedInfo;
+	// Pass
+	PassConstants mMainPassCB;
 
 	// List of all the render items.
 	std::vector<std::unique_ptr<RenderItem>> mAllRitems;
@@ -195,7 +199,10 @@ private:
 	// Render items divided by PSO.
 	std::vector<RenderItem*> mRitems[(int)RenderLayer::Count];
 
-	PassConstants mMainPassCB;
+	// For FBX
+	SkinnedData mSkinnedInfo;
+	UINT mSkinnedSrvHeapStart = 0;
+	std::unique_ptr<SkinnedModelInstance> mSkinnedModelInst;
 
 	UINT mObjCbvOffset = 0;
 	UINT mPassCbvOffset = 0;
@@ -206,30 +213,8 @@ private:
 	bool mIsWireframe = false;
 	bool mFbxWireframe = false;
 
-	/*
-	* EyePos - EyeTarget
-	* player - playerTarget
-	* a d - playerTarget Move(Yaw)
-	* w s - playerTarget, EyePos Move // EyeDirection based on playerTarget
-	* mouse click - EyeTarget Move
-	*/
-	const float mCameraRadius = 20.0f;
-	float mCameraPhi = XM_PIDIV2;
-	float mCameraTheta = 0.0f;
-
 	Light mMainLight;
-
-	// Player Infomation and Cache render items of player
-	RenderItem* mPlayerRitem = nullptr;
-
-	bool mViewDirty = false;
-	XMFLOAT3 mEyePos = { -10.0f, 10.0f, 10.0f };
-	XMFLOAT3 mEyeTarget = { 0.0f, 0.0f, 0.0f };
-	XMFLOAT3 mEyeUp = { 0.0f, 1.0f, 0.0f };
-	XMFLOAT3 mEyeRight = { -0.5f, 0.0f, -0.5f };
-
-	XMFLOAT4X4 mView = MathHelper::Identity4x4();
-	XMFLOAT4X4 mProj = MathHelper::Identity4x4();
+	Camera mCamera;
 
 	POINT mLastMousePos;
 };
