@@ -6,7 +6,7 @@
 <br/>
 
 ## Animation
-![](./Resource/FBX/Boxing_Anim_Tex.gif)
+![](./Resource/gif/Boxing_Anim_Tex.gif)
 
 <br/>
 
