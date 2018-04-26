@@ -75,13 +75,13 @@
     <ClInclude Include="..\Common\UploadBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="vertexHash.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="FBXLoaderApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VertexHash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

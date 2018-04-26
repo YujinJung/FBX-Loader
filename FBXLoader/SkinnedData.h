@@ -15,6 +15,22 @@ struct Keyframe
 	DirectX::XMFLOAT3 Translation;
 	DirectX::XMFLOAT3 Scale;
 	DirectX::XMFLOAT4 RotationQuat;
+
+	bool operator == (const Keyframe& key)
+	{
+		if (Translation.x != key.Translation.x || Translation.y != key.Translation.y || Translation.z != key.Translation.z)
+			return false;
+
+		if (Scale.x != key.Scale.x || Scale.y != key.Scale.y || Scale.z != key.Scale.z)
+			return false;
+
+		if (RotationQuat.x != key.RotationQuat.x || RotationQuat.y != key.RotationQuat.y || RotationQuat.z != key.RotationQuat.z || RotationQuat.w != key.RotationQuat.w)
+			return false;
+
+		return true;
+	}
+
+	
 };
 
 ///<summary>

@@ -61,7 +61,6 @@ bool FBXLoaderApp::Initialize()
 	BuildShapeGeometry();
 	BuildMaterials();
 	BuildRenderItems();
-	BuildObjectShadows();
 	BuildFrameResources();
 	BuildDescriptorHeaps();
 	BuildTextureBufferViews();
@@ -385,25 +384,6 @@ void FBXLoaderApp::UpdateObjectShadows(const GameTimer& gt)
 	}
 }
 
-//void FBXLoaderApp::UpdateSkinnedShadowCBs(const GameTimer & gt, const std::vector<DirectX::XMFLOAT4X4> FinalTransforms)
-//{
-//	int i = 0;
-//	for (auto& e : mRitems[(int)RenderLayer::Shadow])
-//	{
-//		// Load the object world
-//		auto& o = mRitems[(int)RenderLayer::SkinnedOpaque][i];
-//		XMMATRIX shadowWorld = XMLoadFloat4x4(&o->World) * XMLoadFloat4x4(&FinalTransforms[i]);
-//
-//		XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-//		XMVECTOR toMainLight = -XMLoadFloat3(&mMainLight.Direction);
-//		XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
-//		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
-//		XMStoreFloat4x4(&e->World, shadowWorld * S * shadowOffsetY);
-//		e->NumFramesDirty = gNumFrameResources;
-//
-//		++i;
-//	}
-//}
 
 ///
 void FBXLoaderApp::BuildDescriptorHeaps()
@@ -425,7 +405,6 @@ void FBXLoaderApp::BuildDescriptorHeaps()
 
 	// mPassCbvOffset + (passSize)
 	// passSize = 1 * gNumFrameResources
-
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
 	cbvHeapDesc.NumDescriptors = numDescriptors;
 	cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -634,17 +613,17 @@ void FBXLoaderApp::BuildShadersAndInputLayout()
 	mInputLayout =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
 	mSkinnedInputLayout =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{ "WEIGHTS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{ "BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "WEIGHTS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "BONEINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 }
 
@@ -697,6 +676,7 @@ void FBXLoaderApp::BuildPSOs()
 	};
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skinnedOpaquePsoDesc, IID_PPV_ARGS(&mPSOs["skinnedOpaque"])));
 
+	//
 	// PSO for skinned wireframe objects.
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedOpaqueWireframePsoDesc = opaquePsoDesc;
 	skinnedOpaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
@@ -716,12 +696,11 @@ void FBXLoaderApp::BuildPSOs()
 
 	//
 	// PSO for opaque wireframe objects.
-	//
-
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaqueWireframePsoDesc = opaquePsoDesc;
 	opaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
 
+	//
 	// PSO for Shadow
 	D3D12_RENDER_TARGET_BLEND_DESC shadowBlendDesc;
 	shadowBlendDesc.BlendEnable = true;
@@ -760,6 +739,7 @@ void FBXLoaderApp::BuildPSOs()
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&shadowPsoDesc, IID_PPV_ARGS(&mPSOs["shadow"])));
 
 
+	// Skinned Shadow
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC skinnedShadowPsoDesc = shadowPsoDesc;
 	skinnedShadowPsoDesc.InputLayout = { mSkinnedInputLayout.data(), (UINT)mSkinnedInputLayout.size() };
 	skinnedShadowPsoDesc.VS =
@@ -784,7 +764,7 @@ void FBXLoaderApp::BuildFrameResources()
 		mFrameResources.push_back(std::make_unique<FrameResource>(
 			md3dDevice.Get(),
 			1, (UINT)mAllRitems.size(),
-			(UINT)mMaterials.size(), 36));
+			(UINT)mMaterials.size(), mSkinnedInfo.BoneCount()));
 	}
 }
 
@@ -926,7 +906,10 @@ void FBXLoaderApp::BuildFbxGeometry()
 	std::vector<SkinnedVertex> outVertices;
 	std::vector<std::uint16_t> outIndices;
 	std::vector<Material> outMaterial;
-	fbx.LoadFBX(outVertices, outIndices, mSkinnedInfo, outMaterial);
+	//std::string FileName = "../Resource/FBX/Capoeira.FBX";
+	std::string FileName = "../Resource/FBX/Boxing_male.FBX";
+
+	fbx.LoadFBX(outVertices, outIndices, mSkinnedInfo, outMaterial, FileName);
 
 	mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
 	mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
@@ -1123,8 +1106,6 @@ void FBXLoaderApp::BuildMaterials()
 	mMaterials["tile0"] = std::move(tile0);
 	mMaterials["grass0"] = std::move(grass0);
 	mMaterials["shadow0"] = std::move(shadow0);
-
-	
 }
 
 void FBXLoaderApp::BuildRenderItems()
@@ -1172,11 +1153,6 @@ void FBXLoaderApp::BuildRenderItems()
 
 	for(auto& e : mRitems[(int)RenderLayer::SkinnedOpaque])
 	{
-		//auto& e = mAllRitems.at(i);
-		//mRitems[(int)RenderLayer::Opaque].push_back(e.get());
-		// Skip the Grid shadow
-		//if (i == 0) continue;
-
 		auto shadowedObjectRitem = std::make_unique<RenderItem>();
 		*shadowedObjectRitem = *e;
 		shadowedObjectRitem->ObjCBIndex = objCBIndex++;
@@ -1189,21 +1165,6 @@ void FBXLoaderApp::BuildRenderItems()
 		mRitems[(int)RenderLayer::Shadow].push_back(shadowedObjectRitem.get());
 		mAllRitems.push_back(std::move(shadowedObjectRitem));
 	}
-}
-
-void FBXLoaderApp::BuildObjectShadows()
-{
-	/*for (auto& e : mRitems[(int)RenderLayer::Shadow])
-	{
-		XMMATRIX world = XMLoadFloat4x4(&e->World);
-
-		XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-		XMVECTOR toMainLight = -XMLoadFloat3(&mMainLight.Direction);
-		XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
-		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
-		XMStoreFloat4x4(&e->World, world * S * shadowOffsetY);
-		e->NumFramesDirty = gNumFrameResources;
-	}*/
 }
 
 

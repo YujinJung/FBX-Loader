@@ -174,7 +174,7 @@
     <ClInclude Include="FBXLoaderApp.h" />
     <ClInclude Include="SkinnedData.h" />
     <ClInclude Include="TextureLoader.h" />
-    <ClInclude Include="vertexHash.h" />
+    <ClInclude Include="VertexHash.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

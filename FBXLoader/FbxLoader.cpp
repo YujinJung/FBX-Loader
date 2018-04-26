@@ -15,7 +15,7 @@ FbxLoader::~FbxLoader()
 
 FbxManager * gFbxManager = nullptr;
 
-HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, std::vector<Material>& outMaterial)
+HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, std::vector<Material>& outMaterial, std::string fileName)
 {
 	if (gFbxManager == nullptr)
 	{
@@ -27,7 +27,7 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 
 	FbxImporter* pImporter = FbxImporter::Create(gFbxManager, "");
 
-	bool bSuccess = pImporter->Initialize("../Resource/FBX/Boxing.FBX", -1, gFbxManager->GetIOSettings());
+	bool bSuccess = pImporter->Initialize(fileName.c_str(), -1, gFbxManager->GetIOSettings());
 	if (!bSuccess) return E_FAIL;
 
 	FbxScene* pFbxScene = FbxScene::Create(gFbxManager, "");
@@ -142,21 +142,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 
 	// Initialize BoneAnimations
 	animation.BoneAnimations.resize(mBoneName.size());
-	for (int i = 0; i < mBoneName.size(); ++i)
-	{
-		BoneAnimation initBoneAnim;
-		for (int i = 0; i < 59; ++i) // 60 frames
-		{
-			Keyframe key;
-
-			key.TimePos = static_cast<float>(i / 24.0f);
-			key.Translation = { 0.0f, 0.0f, 0.0f };
-			key.Scale = { 1.0f, 1.0f, 1.0f };
-			key.RotationQuat = { 0.0f, 0.0f, 0.0f, 0.0f };
-			initBoneAnim.Keyframes.push_back(key);
-		}
-		animation.BoneAnimations[i] = initBoneAnim;
-	}
+	
 
 	// Deformer - Cluster - Link
 	// Deformer
@@ -213,23 +199,25 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			BoneAnimation boneAnim;
 
 			FbxAnimStack* pCurrAnimStack = pFbxScene->GetSrcObject<FbxAnimStack>(0);
+			
 			FbxString currAnimStackName = pCurrAnimStack->GetName();
 			outAnimationName = currAnimStackName.Buffer();
-
 			FbxAnimEvaluator* pSceneEvaluator = pFbxScene->GetAnimationEvaluator();
-
+			
 			FbxTakeInfo* takeInfo = pFbxScene->GetTakeInfo(currAnimStackName);
-			FbxTime start = takeInfo->mReferenceTimeSpan.GetStart();
-			FbxTime end = takeInfo->mReferenceTimeSpan.GetStop();
+			auto interval = takeInfo->mReferenceTimeSpan;
+			
+			FbxNode* pRootNode = pFbxScene->GetRootNode();
 
 			// TRqS transformation and Time per frame
-			for (FbxLongLong i = start.GetFrameCount(FbxTime::eFrames60); i <= end.GetFrameCount(FbxTime::eFrames60); ++i)
+			FbxLongLong index;
+			for (index = 0; index < 100; ++index)
 			{
 				FbxTime currTime;
-				currTime.SetFrame(i, FbxTime::eFrames60);
+				currTime.SetFrame(index, FbxTime::eCustom);
 
 				Keyframe key;
-				key.TimePos = static_cast<float>(i / 24.0f);
+				key.TimePos = static_cast<float>(index) / 8.0f;
 
 				FbxAMatrix currentTransformOffset = pSceneEvaluator->GetNodeGlobalTransform(pFbxChildNode, currTime) * geometryTransform;
 				FbxAMatrix temp = currentTransformOffset.Inverse() * pSceneEvaluator->GetNodeGlobalTransform(pCurrCluster->GetLink(), currTime);
@@ -252,11 +240,44 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 					static_cast<float>(Q.mData[2]) , 
 					static_cast<float>(Q.mData[3]) };
 
+				// Frame does not exist
+				if (index != 0 && boneAnim.Keyframes.back() == key)
+					break;
+
 				boneAnim.Keyframes.push_back(key);
 			}
-
 			animation.BoneAnimations[currJointIndex] = boneAnim;
 		}
+	}
+
+	BoneAnimation InitBoneAnim;
+
+	// Initialize InitBoneAnim
+	for (int i = 0; i < mBoneName.size(); ++i)
+	{
+		int KeyframeSize = animation.BoneAnimations[i].Keyframes.size();
+		if (KeyframeSize != 0)
+		{
+			for (int j = 0; j < KeyframeSize; ++j) // 60 frames
+			{
+				Keyframe key;
+
+				key.TimePos = static_cast<float>(j / 24.0f);
+				key.Translation = { 0.0f, 0.0f, 0.0f };
+				key.Scale = { 1.0f, 1.0f, 1.0f };
+				key.RotationQuat = { 0.0f, 0.0f, 0.0f, 0.0f };
+				InitBoneAnim.Keyframes.push_back(key);
+			}
+			break;
+		}
+	}
+
+	for (int i = 0; i < mBoneName.size(); ++i)
+	{
+		if (animation.BoneAnimations[i].Keyframes.size() != 0)
+			continue;
+
+		animation.BoneAnimations[i] = InitBoneAnim;
 	}
 
 	BoneIndexAndWeight currBoneIndexAndWeight;

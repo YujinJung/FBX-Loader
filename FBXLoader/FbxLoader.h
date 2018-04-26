@@ -37,7 +37,7 @@ public:
 	FbxLoader();
 	~FbxLoader();
 
-	HRESULT LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData & outSkinnedData, std::vector<Material>& outMaterial);
+	HRESULT LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData & outSkinnedData, std::vector<Material>& outMaterial, std::string fileName);
 
 	void GetSkeletonHierarchy(FbxNode * pNode, int curIndex, int parentIndex);
 
