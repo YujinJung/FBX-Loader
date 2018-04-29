@@ -65,8 +65,6 @@ struct AnimationClip
 	std::vector<BoneAnimation> BoneAnimations;
 };
 
-void printMatrix(const std::wstring& Name, const int& i, const DirectX::XMMATRIX & M);
-
 class SkinnedData
 {
 public:
@@ -74,18 +72,20 @@ public:
 
 	float GetClipStartTime(const std::string& clipName)const;
 	float GetClipEndTime(const std::string& clipName)const;
+	std::string GetAnimationName(int num) const;
+	std::vector<int> GetBoneHierarchy() const;
+	std::vector<DirectX::XMFLOAT4X4> GetBoneOffsets() const;
+	AnimationClip GetAnimation(std::string clipName) const;
+	std::vector<int> GetSubmeshOffset() const;
+	DirectX::XMFLOAT4X4 getBoneOffsets(int num) const;
 
 	void Set(
 		std::vector<int>& boneHierarchy,
 		std::vector<DirectX::XMFLOAT4X4>& boneOffsets,
 		std::unordered_map<std::string, AnimationClip>& animations);
-	
+	void SetAnimation(AnimationClip inAnimation, std::string inClipName);
 	void SetAnimationName(const std::string& clipName);
-	std::string GetAnimationName(int num) const;
-
 	void SetSubmeshOffset(int num);
-
-	std::vector<int> GetSubmeshOffset() const;
 
 	// In a real project, you'd want to cache the result if there was a chance
 	// that you were calling this several times with the same clipName at 
@@ -93,7 +93,6 @@ public:
 	void GetFinalTransforms(const std::string& clipName, float timePos,
 		std::vector<DirectX::XMFLOAT4X4>& finalTransforms)const;
 
-	DirectX::XMFLOAT4X4 getBoneOffsets(int num) const;
 
 private:
 	// Gives parentIndex of ith bone.

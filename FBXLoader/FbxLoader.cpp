@@ -15,23 +15,25 @@ FbxLoader::~FbxLoader()
 
 FbxManager * gFbxManager = nullptr;
 
-HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, std::vector<Material>& outMaterial, std::string fileName)
+HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& clipName, std::vector<Material>& outMaterial, std::string fileName)
 {
+	// if exported animation exist
+	if (LoadTXT(outVertexVector, outIndexVector, outSkinnedData, clipName, outMaterial, fileName)) return S_OK;
+
 	if (gFbxManager == nullptr)
 	{
-	    gFbxManager = FbxManager::Create();
+		gFbxManager = FbxManager::Create();
 
 		FbxIOSettings* pIOsettings = FbxIOSettings::Create(gFbxManager, IOSROOT);
 		gFbxManager->SetIOSettings(pIOsettings);
 	}
 
 	FbxImporter* pImporter = FbxImporter::Create(gFbxManager, "");
-
-	bool bSuccess = pImporter->Initialize(fileName.c_str(), -1, gFbxManager->GetIOSettings());
+	std::string fbxFileName = fileName + clipName + ".fbx";
+	bool bSuccess = pImporter->Initialize(fbxFileName.c_str(), -1, gFbxManager->GetIOSettings());
 	if (!bSuccess) return E_FAIL;
 
 	FbxScene* pFbxScene = FbxScene::Create(gFbxManager, "");
-
 	bSuccess = pImporter->Import(pFbxScene);
 	if (!bSuccess) return E_FAIL;
 
@@ -84,8 +86,9 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 
 				// Get Animation Clip
 				std::string outAnimationName;
-				GetAnimation(pFbxScene, pFbxChildNode, outAnimationName);
-				outSkinnedData.SetAnimationName(outAnimationName);
+				GetAnimation(pFbxScene, pFbxChildNode, outAnimationName, clipName);
+				outSkinnedData.SetAnimationName(clipName);
+				//outSkinnedData.SetAnimationName(outAnimationName);
 
 				// Get Vertices and indices info
 				GetVerticesAndIndice(pMesh, outVertexVector, outIndexVector, outSkinnedData);
@@ -99,7 +102,238 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 		outSkinnedData.Set(mBoneHierarchy, mBoneOffsets, mAnimations);
 	}
 
+	ExportFBX(outVertexVector, outIndexVector, outSkinnedData, clipName, outMaterial, fileName);
+
 	return S_OK;
+}
+HRESULT FbxLoader::LoadFBX(AnimationClip & animation, const std::string& clipName, std::string fileName)
+{
+	// if exported animation exist
+	if (LoadAnimation(animation, clipName, fileName)) return S_OK;
+
+	if (gFbxManager == nullptr)
+	{
+		gFbxManager = FbxManager::Create();
+
+		FbxIOSettings* pIOsettings = FbxIOSettings::Create(gFbxManager, IOSROOT);
+		gFbxManager->SetIOSettings(pIOsettings);
+	}
+
+	FbxImporter* pImporter = FbxImporter::Create(gFbxManager, "");
+	std::string fbxFileName = fileName + clipName + ".fbx";
+
+	bool bSuccess = pImporter->Initialize(fbxFileName.c_str(), -1, gFbxManager->GetIOSettings());
+	if (!bSuccess) return E_FAIL;
+
+	FbxScene* pFbxScene = FbxScene::Create(gFbxManager, "");
+	bSuccess = pImporter->Import(pFbxScene);
+	if (!bSuccess) return E_FAIL;
+
+	pImporter->Destroy();
+
+	FbxAxisSystem sceneAxisSystem = pFbxScene->GetGlobalSettings().GetAxisSystem();
+	FbxAxisSystem::MayaZUp.ConvertScene(pFbxScene); // Delete?
+
+	// Convert quad to triangle
+	FbxGeometryConverter geometryConverter(gFbxManager);
+	geometryConverter.Triangulate(pFbxScene, true);
+
+	// Start to RootNode
+	FbxNode* pFbxRootNode = pFbxScene->GetRootNode();
+	if (pFbxRootNode)
+	{
+		// Animation Data
+		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
+		{
+			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
+			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
+			FbxNodeAttribute::EType AttributeType = pMesh->GetAttributeType();
+			if (!pMesh || !AttributeType) { continue; }
+
+			if (AttributeType == FbxNodeAttribute::eMesh)
+			{
+				// Get Animation Clip
+				GetOnlyAnimation(pFbxScene, pFbxChildNode, animation);
+			}
+		}
+	}
+
+	ExportAnimation(animation, fileName, clipName);
+
+	return S_OK;
+}
+bool FbxLoader::LoadTXT(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& clipName, std::vector<Material>& outMaterial, std::string fileName)
+{
+	fileName = fileName + clipName + ".txt";
+	std::ifstream fileIn(fileName);
+
+	uint32_t vertexSize, indexSize;
+	uint32_t boneSize, keyframeSize;
+	uint32_t materialSize;
+
+	std::string ignore;
+	if (fileIn)
+	{
+		fileIn >> ignore >> vertexSize;
+		fileIn >> ignore >> indexSize;
+		fileIn >> ignore >> boneSize;
+		fileIn >> ignore >> keyframeSize;
+		fileIn >> ignore >> materialSize;
+
+		if (vertexSize == 0 || indexSize == 0
+			|| boneSize == 0 || keyframeSize == 0 || materialSize == 0)
+			return false;
+
+		// Vertex Data
+		for (int i = 0; i < vertexSize; ++i)
+		{
+			SkinnedVertex vertex;
+			int temp[4];
+			fileIn >> ignore >> vertex.Pos.x >> vertex.Pos.y >> vertex.Pos.z;
+			fileIn >> ignore >> vertex.Normal.x >> vertex.Normal.y >> vertex.Normal.z;
+			fileIn >> ignore >> vertex.TexC.x >> vertex.TexC.y;
+			fileIn >> ignore >> vertex.BoneWeights.x >> vertex.BoneWeights.y >> vertex.BoneWeights.z;
+			fileIn >> ignore >> temp[0] >> temp[1] >> temp[2] >> temp[3];
+			fileIn >> ignore >> vertex.MaterialIndex;
+
+			for (int j = 0; j < 4; ++j)
+			{
+				vertex.BoneIndices[j] = temp[j];
+			}
+			// push_back
+			outVertexVector.push_back(vertex);
+		}
+
+		// Index Data
+		fileIn >> ignore;
+		for (int i = 0; i < indexSize; ++i)
+		{
+			uint16_t index;
+			fileIn >> index;
+			outIndexVector.push_back(index);
+		}
+
+		// Bone Data
+		// Bone Hierarchy
+		fileIn >> ignore;
+		std::vector<int> boneHierarchy;
+		for (int i = 0; i < boneSize; ++i)
+		{
+			int tempBoneHierarchy;
+			fileIn >> tempBoneHierarchy;
+			boneHierarchy.push_back(tempBoneHierarchy);
+		}
+		// Bone Offset
+		fileIn >> ignore;
+		std::vector<DirectX::XMFLOAT4X4> boneOffsets;
+		for (int i = 0; i < boneSize; ++i)
+		{
+			DirectX::XMFLOAT4X4 tempBoneOffset;
+			for (int i = 0; i < 4; ++i)
+			{
+				for (int j = 0; j < 4; ++j)
+				{
+					fileIn >> tempBoneOffset.m[i][j];
+				}
+			}
+			boneOffsets.push_back(tempBoneOffset);
+		}
+		// Bone Submesh Offset
+		fileIn >> ignore;
+		std::vector<int> boneSubmeshOffset;
+		for (int i = 0; i < boneSize; ++i)
+		{
+			int tempBoneSubmeshOffset;
+			fileIn >> tempBoneSubmeshOffset;
+			outSkinnedData.SetSubmeshOffset(tempBoneSubmeshOffset);
+		}
+
+		// Animation Data
+		fileIn >> ignore;
+		AnimationClip animation;
+		for (uint32_t i = 0; i < boneSize; ++i)
+		{
+			BoneAnimation boneAnim;
+			for (uint32_t j = 0; j < keyframeSize; ++j)
+			{
+				Keyframe key;
+				fileIn >> key.TimePos;
+				fileIn >> key.Translation.x >> key.Translation.y >> key.Translation.z;
+				fileIn >> key.Scale.x >> key.Scale.y >> key.Scale.z;
+				fileIn >> key.RotationQuat.x >> key.RotationQuat.y >> key.RotationQuat.z >> key.RotationQuat.w;
+				boneAnim.Keyframes.push_back(key);
+			}
+			animation.BoneAnimations.push_back(boneAnim);
+		}
+		mAnimations[clipName] = animation;
+
+		outSkinnedData.Set(
+			boneHierarchy,
+			boneOffsets,
+			mAnimations);
+
+		// Material Data
+		fileIn >> ignore;
+		for (int i = 0; i < materialSize; ++i)
+		{
+			Material tempMaterial;
+
+			fileIn >> ignore >> tempMaterial.Name;
+			fileIn >> ignore >> tempMaterial.Ambient.x >> tempMaterial.Ambient.y >> tempMaterial.Ambient.z;
+			fileIn >> ignore >> tempMaterial.DiffuseAlbedo.x >> tempMaterial.DiffuseAlbedo.y >> tempMaterial.DiffuseAlbedo.z;
+			fileIn >> ignore >> tempMaterial.FresnelR0.x >> tempMaterial.FresnelR0.y >> tempMaterial.FresnelR0.z;
+			fileIn >> ignore >> tempMaterial.Specular.x >> tempMaterial.Specular.y >> tempMaterial.Specular.z;
+			fileIn >> ignore >> tempMaterial.Emissive.x >> tempMaterial.Emissive.y >> tempMaterial.Emissive.z;
+			fileIn >> ignore >> tempMaterial.Roughness;
+			for (int i = 0; i < 4; ++i)
+			{
+				for (int j = 0; j < 4; ++j)
+				{
+					fileIn >> tempMaterial.MatTransform.m[i][j];
+				}
+			}
+			outMaterial.push_back(tempMaterial);
+		}
+
+
+		return true;
+	}
+
+	return false;
+}
+
+bool FbxLoader::LoadAnimation(AnimationClip& animation, const std::string& clipName, std::string fileName)
+{
+	fileName = fileName + clipName + ".txt";
+	std::ifstream fileIn(fileName);
+
+	uint32_t boneAnimationSize, keyframeSize;
+
+	std::string ignore;
+	if (fileIn)
+	{
+		fileIn >> ignore >> boneAnimationSize;
+		fileIn >> ignore >> keyframeSize;
+
+		for (uint32_t i = 0; i < boneAnimationSize; ++i)
+		{
+			BoneAnimation boneAnim;
+			for (uint32_t j = 0; j < keyframeSize; ++j)
+			{
+				Keyframe key;
+				fileIn >> key.TimePos;
+				fileIn >> key.Translation.x >> key.Translation.y >> key.Translation.z;
+				fileIn >> key.Scale.x >> key.Scale.y >> key.Scale.z;
+				fileIn >> key.RotationQuat.x >> key.RotationQuat.y >> key.RotationQuat.z >> key.RotationQuat.w;
+				boneAnim.Keyframes.push_back(key);
+			}
+			animation.BoneAnimations.push_back(boneAnim);
+		}
+
+		return true;
+	}
+
+	return false;
 }
 
 void FbxLoader::GetSkeletonHierarchy(FbxNode * pNode, int curIndex, int parentIndex)
@@ -112,7 +346,6 @@ void FbxLoader::GetSkeletonHierarchy(FbxNode * pNode, int curIndex, int parentIn
 		GetSkeletonHierarchy(pNode->GetChild(i), mBoneHierarchy.size(), curIndex);
 	}
 }
-
 void FbxLoader::GetControlPoints(fbxsdk::FbxNode * pFbxRootNode)
 {
 	FbxMesh * pCurrMesh = (FbxMesh*)pFbxRootNode->GetNodeAttribute();
@@ -121,7 +354,7 @@ void FbxLoader::GetControlPoints(fbxsdk::FbxNode * pFbxRootNode)
 	for (unsigned int i = 0; i < ctrlPointCount; ++i)
 	{
 		CtrlPoint* currCtrlPoint = new CtrlPoint();
-		
+
 		DirectX::XMFLOAT3 currPosition;
 		currPosition.x = static_cast<float>(pCurrMesh->GetControlPointAt(i).mData[0]);
 		currPosition.y = static_cast<float>(pCurrMesh->GetControlPointAt(i).mData[1]);
@@ -131,8 +364,7 @@ void FbxLoader::GetControlPoints(fbxsdk::FbxNode * pFbxRootNode)
 		mControlPoints[i] = currCtrlPoint;
 	}
 }
-
-void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::string &outAnimationName)
+void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::string &outAnimationName, const std::string& ClipName)
 {
 	FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
 	FbxAMatrix geometryTransform = GetGeometryTransformation(pFbxChildNode);
@@ -142,7 +374,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 
 	// Initialize BoneAnimations
 	animation.BoneAnimations.resize(mBoneName.size());
-	
+
 
 	// Deformer - Cluster - Link
 	// Deformer
@@ -150,7 +382,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 	{
 		FbxSkin* pCurrSkin = reinterpret_cast<FbxSkin*>(pMesh->GetDeformer(deformerIndex, FbxDeformer::eSkin));
 		if (!pCurrSkin) { continue; }
-		
+
 		// Cluster
 		for (uint32_t clusterIndex = 0; clusterIndex < pCurrSkin->GetClusterCount(); ++clusterIndex)
 		{
@@ -166,7 +398,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			// To find the index that matches the name of the current joint
 			std::string currJointName = pCurrCluster->GetLink()->GetName();
 			BYTE currJointIndex; // current joint index
-			for (currJointIndex = 0; currJointIndex< mBoneName.size(); ++currJointIndex)
+			for (currJointIndex = 0; currJointIndex < mBoneName.size(); ++currJointIndex)
 			{
 				if (mBoneName[currJointIndex] == currJointName)
 					break;
@@ -184,7 +416,7 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			mBoneOffsets[currJointIndex] = boneOffset;
 
 			// Set the Bone index and weight ./ Max 4
-			auto controlPointIndices =  pCurrCluster->GetControlPointIndices();
+			auto controlPointIndices = pCurrCluster->GetControlPointIndices();
 			for (uint32_t i = 0; i < pCurrCluster->GetControlPointIndicesCount(); ++i)
 			{
 				BoneIndexAndWeight currBoneIndexAndWeight;
@@ -194,19 +426,19 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 				mControlPoints[controlPointIndices[i]]->mBoneInfo.push_back(currBoneIndexAndWeight);
 				mControlPoints[controlPointIndices[i]]->mBoneName = currJointName;
 			}
-			
+
 			// Set the Bone Animation Matrix
 			BoneAnimation boneAnim;
 
 			FbxAnimStack* pCurrAnimStack = pFbxScene->GetSrcObject<FbxAnimStack>(0);
-			
+
 			FbxString currAnimStackName = pCurrAnimStack->GetName();
 			outAnimationName = currAnimStackName.Buffer();
 			FbxAnimEvaluator* pSceneEvaluator = pFbxScene->GetAnimationEvaluator();
-			
+
 			FbxTakeInfo* takeInfo = pFbxScene->GetTakeInfo(currAnimStackName);
 			auto interval = takeInfo->mReferenceTimeSpan;
-			
+
 			FbxNode* pRootNode = pFbxScene->GetRootNode();
 
 			// TRqS transformation and Time per frame
@@ -224,20 +456,20 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 
 				// Transition, Scaling and Rotation Quaternion
 				FbxVector4 TS = temp.GetT();
-				key.Translation = { 
-					static_cast<float>(TS.mData[0]), 
-					static_cast<float>(TS.mData[1]),  
+				key.Translation = {
+					static_cast<float>(TS.mData[0]),
+					static_cast<float>(TS.mData[1]),
 					static_cast<float>(TS.mData[2]) };
 				TS = temp.GetS();
-				key.Scale = { 
-					static_cast<float>(TS.mData[0]),  
-					static_cast<float>(TS.mData[1]),  
+				key.Scale = {
+					static_cast<float>(TS.mData[0]),
+					static_cast<float>(TS.mData[1]),
 					static_cast<float>(TS.mData[2]) };
 				FbxQuaternion Q = temp.GetQ();
-				key.RotationQuat = { 
-					static_cast<float>(Q.mData[0]),  
-					static_cast<float>(Q.mData[1]),  
-					static_cast<float>(Q.mData[2]) , 
+				key.RotationQuat = {
+					static_cast<float>(Q.mData[0]),
+					static_cast<float>(Q.mData[1]),
+					static_cast<float>(Q.mData[2]) ,
 					static_cast<float>(Q.mData[3]) };
 
 				// Frame does not exist
@@ -291,7 +523,125 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 		}
 	}
 
-	mAnimations[outAnimationName] = animation;
+	mAnimations[ClipName] = animation;
+}
+void FbxLoader::GetOnlyAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, AnimationClip& inAnimation)
+{
+	FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
+	FbxAMatrix geometryTransform = GetGeometryTransformation(pFbxChildNode);
+
+	// Animation Data
+	AnimationClip animation;
+
+	// Initialize BoneAnimations
+	animation.BoneAnimations.resize(mBoneName.size());
+
+	// Deformer - Cluster - Link
+	// Deformer
+	for (uint32_t deformerIndex = 0; deformerIndex < pMesh->GetDeformerCount(); ++deformerIndex)
+	{
+		FbxSkin* pCurrSkin = reinterpret_cast<FbxSkin*>(pMesh->GetDeformer(deformerIndex, FbxDeformer::eSkin));
+		if (!pCurrSkin) { continue; }
+
+		// Cluster
+		for (uint32_t clusterIndex = 0; clusterIndex < pCurrSkin->GetClusterCount(); ++clusterIndex)
+		{
+			FbxCluster* pCurrCluster = pCurrSkin->GetCluster(clusterIndex);
+
+			// To find the index that matches the name of the current joint
+			std::string currJointName = pCurrCluster->GetLink()->GetName();
+			BYTE currJointIndex; // current joint index
+			for (currJointIndex = 0; currJointIndex < mBoneName.size(); ++currJointIndex)
+			{
+				if (mBoneName[currJointIndex] == currJointName)
+					break;
+			}
+
+			// Set the Bone Animation Matrix
+			BoneAnimation boneAnim;
+
+			FbxAnimStack* pCurrAnimStack = pFbxScene->GetSrcObject<FbxAnimStack>(0);
+
+			FbxString currAnimStackName = pCurrAnimStack->GetName();
+			FbxAnimEvaluator* pSceneEvaluator = pFbxScene->GetAnimationEvaluator();
+
+			FbxTakeInfo* takeInfo = pFbxScene->GetTakeInfo(currAnimStackName);
+			auto interval = takeInfo->mReferenceTimeSpan;
+
+			FbxNode* pRootNode = pFbxScene->GetRootNode();
+
+			// TRqS transformation and Time per frame
+			FbxLongLong index;
+			for (index = 0; index < 100; ++index)
+			{
+				FbxTime currTime;
+				currTime.SetFrame(index, FbxTime::eCustom);
+
+				Keyframe key;
+				key.TimePos = static_cast<float>(index) / 8.0f;
+
+				FbxAMatrix currentTransformOffset = pSceneEvaluator->GetNodeGlobalTransform(pFbxChildNode, currTime) * geometryTransform;
+				FbxAMatrix temp = currentTransformOffset.Inverse() * pSceneEvaluator->GetNodeGlobalTransform(pCurrCluster->GetLink(), currTime);
+
+				// Transition, Scaling and Rotation Quaternion
+				FbxVector4 TS = temp.GetT();
+				key.Translation = {
+					static_cast<float>(TS.mData[0]),
+					static_cast<float>(TS.mData[1]),
+					static_cast<float>(TS.mData[2]) };
+				TS = temp.GetS();
+				key.Scale = {
+					static_cast<float>(TS.mData[0]),
+					static_cast<float>(TS.mData[1]),
+					static_cast<float>(TS.mData[2]) };
+				FbxQuaternion Q = temp.GetQ();
+				key.RotationQuat = {
+					static_cast<float>(Q.mData[0]),
+					static_cast<float>(Q.mData[1]),
+					static_cast<float>(Q.mData[2]) ,
+					static_cast<float>(Q.mData[3]) };
+
+				// Frame does not exist
+				if (index != 0 && boneAnim.Keyframes.back() == key)
+					break;
+
+				boneAnim.Keyframes.push_back(key);
+			}
+			animation.BoneAnimations[currJointIndex] = boneAnim;
+		}
+	}
+
+	BoneAnimation InitBoneAnim;
+
+	// Initialize InitBoneAnim
+	for (int i = 0; i < mBoneName.size(); ++i)
+	{
+		int KeyframeSize = animation.BoneAnimations[i].Keyframes.size();
+		if (KeyframeSize != 0)
+		{
+			for (int j = 0; j < KeyframeSize; ++j) // 60 frames
+			{
+				Keyframe key;
+
+				key.TimePos = static_cast<float>(j / 24.0f);
+				key.Translation = { 0.0f, 0.0f, 0.0f };
+				key.Scale = { 1.0f, 1.0f, 1.0f };
+				key.RotationQuat = { 0.0f, 0.0f, 0.0f, 0.0f };
+				InitBoneAnim.Keyframes.push_back(key);
+			}
+			break;
+		}
+	}
+
+	for (int i = 0; i < mBoneName.size(); ++i)
+	{
+		if (animation.BoneAnimations[i].Keyframes.size() != 0)
+			continue;
+
+		animation.BoneAnimations[i] = InitBoneAnim;
+	}
+
+	inAnimation = animation;
 }
 
 void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex> & outVertexVector, std::vector<uint16_t> & outIndexVector, SkinnedData& outSkinnedData)
@@ -354,12 +704,12 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 			}
 
 			FbxVector2 pUVs;
-			bool bUnMappedUV;	
+			bool bUnMappedUV;
 			if (!pMesh->GetPolygonVertexUV(i, j, lUVName, pUVs, bUnMappedUV))
 			{
 				MessageBox(0, L"UV not found", 0, 0);
 			}
-			
+
 			Vertex Temp;
 			// Position
 			Temp.Pos.x = CurrCtrlPoint->mPosition.x;
@@ -437,20 +787,6 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 	}
 }
 
-FbxAMatrix FbxLoader::GetGeometryTransformation(FbxNode* pNode)
-{
-	if (!pNode)
-	{
-		throw std::exception("Null for mesh geometry");
-	}
-
-	const FbxVector4 lT = pNode->GetGeometricTranslation(FbxNode::eSourcePivot);
-	const FbxVector4 lR = pNode->GetGeometricRotation(FbxNode::eSourcePivot);
-	const FbxVector4 lS = pNode->GetGeometricScaling(FbxNode::eSourcePivot);
-
-	return FbxAMatrix(lT, lR, lS);
-}
-
 void FbxLoader::GetMaterials(FbxNode* pNode, std::vector<Material>& outMaterial)
 {
 	uint32_t MaterialCount = pNode->GetMaterialCount();
@@ -462,7 +798,6 @@ void FbxLoader::GetMaterials(FbxNode* pNode, std::vector<Material>& outMaterial)
 		GetMaterialTexture(SurfaceMaterial, outMaterial[i]);
 	}
 }
-
 void FbxLoader::GetMaterialAttribute(FbxSurfaceMaterial* pMaterial, std::vector<Material>& outMaterial)
 {
 	FbxDouble3 double3;
@@ -504,7 +839,7 @@ void FbxLoader::GetMaterialAttribute(FbxSurfaceMaterial* pMaterial, std::vector<
 		currMaterial.Emissive.x = static_cast<float>(double3.mData[0]);
 		currMaterial.Emissive.y = static_cast<float>(double3.mData[1]);
 		currMaterial.Emissive.z = static_cast<float>(double3.mData[2]);
-		
+
 		/*
 		// Transparency Factor
 		double1 = reinterpret_cast<FbxSurfacePhong *>(inMaterial)->TransparencyFactor;
@@ -546,7 +881,6 @@ void FbxLoader::GetMaterialAttribute(FbxSurfaceMaterial* pMaterial, std::vector<
 		outMaterial.push_back(currMaterial);
 	}
 }
-
 void FbxLoader::GetMaterialTexture(FbxSurfaceMaterial * pMaterial, Material & Mat)
 {
 	unsigned int textureIndex = 0;
@@ -595,3 +929,150 @@ void FbxLoader::GetMaterialTexture(FbxSurfaceMaterial * pMaterial, Material & Ma
 	}
 }
 
+FbxAMatrix FbxLoader::GetGeometryTransformation(FbxNode* pNode)
+{
+	if (!pNode)
+	{
+		throw std::exception("Null for mesh geometry");
+	}
+
+	const FbxVector4 lT = pNode->GetGeometricTranslation(FbxNode::eSourcePivot);
+	const FbxVector4 lR = pNode->GetGeometricRotation(FbxNode::eSourcePivot);
+	const FbxVector4 lS = pNode->GetGeometricScaling(FbxNode::eSourcePivot);
+
+	return FbxAMatrix(lT, lR, lS);
+}
+
+void FbxLoader::ExportAnimation(const AnimationClip& animation, std::string fileName, const std::string& clipName)
+{
+	fileName = fileName + clipName + ".txt";
+	std::ofstream fileOut(fileName);
+
+	if (animation.BoneAnimations[0].Keyframes.size() == 0)
+		return;
+
+	if (fileOut)
+	{
+		uint32_t boneAnimationSize = animation.BoneAnimations.size();
+		uint32_t keyframeSize = animation.BoneAnimations[0].Keyframes.size();
+		fileOut << "BoneAnimationSize " << boneAnimationSize << "\n";
+		fileOut << "KeframeSize " << keyframeSize << "\n";
+		for (uint32_t i = 0; i < boneAnimationSize; ++i)
+		{
+			BoneAnimation bone = animation.BoneAnimations[i];
+			for (uint32_t j = 0; j < keyframeSize; ++j)
+			{
+				Keyframe key = bone.Keyframes[j];
+				fileOut << key.TimePos << "\n";
+				fileOut << key.Translation.x << " " << key.Translation.y << " " << key.Translation.z << "\n";
+				fileOut << key.Scale.x << " " << key.Scale.y << " " << key.Scale.z << "\n";
+				fileOut << key.RotationQuat.x << " " << key.RotationQuat.y << " " << key.RotationQuat.z << " " << key.RotationQuat.w << "\n";
+			}
+		}
+	}
+}
+
+void FbxLoader::ExportFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& clipName, std::vector<Material>& outMaterial, std::string fileName)
+{
+	fileName = fileName + clipName + ".txt";
+	std::ofstream fileOut(fileName);
+
+	if (outVertexVector.empty() || outIndexVector.empty() 
+		|| outMaterial.empty() || outSkinnedData.BoneCount() == 0)
+		return;
+
+	if (fileOut)
+	{
+		uint32_t vertexSize = outVertexVector.size();
+		uint32_t indexSize = outIndexVector.size();
+
+		uint32_t boneSize = outSkinnedData.BoneCount();
+		AnimationClip anim = mAnimations[clipName];
+		uint32_t keyframeSize = anim.BoneAnimations[0].Keyframes.size();
+
+		uint32_t materialSize = outMaterial.size();
+
+		fileOut << "VertexSize " << vertexSize << "\n";
+		fileOut << "IndexSize " << indexSize << "\n";
+		fileOut << "Bone " << boneSize << "\n";
+		fileOut << "KeframeSize " << keyframeSize << "\n";
+		fileOut << "MaterialSize " << materialSize << "\n";
+
+		for(auto& e : outVertexVector)
+		{
+			fileOut << "Pos " << e.Pos.x << " " << e.Pos.y << " " << e.Pos.z << "\n";
+			fileOut << "Normal " << e.Normal.x << " " << e.Normal.y << " " << e.Normal.z << "\n";
+			fileOut << "TexC " << e.TexC.x << " " << e.TexC.y << "\n";
+
+			fileOut << "BoneWeight " << e.BoneWeights.x << " " << e.BoneWeights.y << " " << e.BoneWeights.z << "\n";
+			fileOut << "BoneIndices " << (int)e.BoneIndices[0] << " " << (int)e.BoneIndices[1] << " " << (int)e.BoneIndices[2] << " " << (int)e.BoneIndices[3] << "\n";
+			fileOut << "MaterialIndex " << e.MaterialIndex << "\n";
+		}
+
+		fileOut << "Indices " << "\n";
+		for (int i = 0; i < indexSize / 3; ++i)
+		{
+			fileOut << outIndexVector[3 * i] << " " << outIndexVector[3 * i + 1] << " " << outIndexVector[3 * i + 2] << "\n";
+		}
+
+		fileOut << "BoneHierarchy" << "\n";
+		for (auto& e : outSkinnedData.GetBoneHierarchy())
+		{
+			fileOut << e << " ";
+		}
+		fileOut << "\n";
+
+		fileOut << "BoneOffset " << "\n";
+		for (auto& e : outSkinnedData.GetBoneOffsets())
+		{
+			for (int i = 0; i < 4; ++i)
+			{
+				for (int j = 0; j < 4; ++j)
+				{
+					fileOut << e.m[i][j] << " ";
+				}
+			}
+			fileOut << "\n";
+		}
+
+		fileOut << "SubmeshOffset " << "\n";
+		for (auto & e : outSkinnedData.GetSubmeshOffset())
+		{
+			fileOut << e << " ";
+		}
+		fileOut << "\n";
+
+		fileOut << "Animation " << "\n";
+		for (auto & e : anim.BoneAnimations)
+		{
+			for (auto& o : e.Keyframes)
+			{
+				fileOut << o.TimePos << "\n";
+				fileOut << o.Translation.x << " " << o.Translation.y << " " << o.Translation.z << "\n";
+				fileOut << o.Scale.x << " " << o.Scale.y << " " << o.Scale.z << "\n";
+				fileOut << o.RotationQuat.x << " " << o.RotationQuat.y << " " << o.RotationQuat.z << " " << o.RotationQuat.w << "\n";
+			}
+		}
+
+		fileOut << "Material " << "\n";
+		for (auto & e : outMaterial)
+		{
+			fileOut << "Name " << e.Name << "\n";
+			fileOut << "Ambient " << e.Ambient.x << " " << e.Ambient.y << " " << e.Ambient.z << "\n";
+			fileOut << "Diffuse " << e.DiffuseAlbedo.x << " " << e.DiffuseAlbedo.y << " " << e.DiffuseAlbedo.z << " " << e.DiffuseAlbedo.w << "\n";
+			fileOut << "Fresnel " << e.FresnelR0.x << " " << e.FresnelR0.y << " " << e.FresnelR0.z << "\n";
+			fileOut << "Specular " << e.Specular.x << " " << e.Specular.y << " " << e.Specular.z << "\n";
+			fileOut << "Emissive " << e.Emissive.x << " " << e.Emissive.y << " " << e.Emissive.z << "\n";
+			fileOut << "Roughness " << e.Roughness << "\n";
+			fileOut << "MatTransform ";
+			for (int i = 0; i < 4; ++i)
+			{
+				for (int j = 0; j < 4; ++j)
+				{
+					fileOut << e.MatTransform.m[i][j] << " ";
+				}
+			}
+			fileOut << "\n";
+		}
+	}
+}

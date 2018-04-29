@@ -37,24 +37,23 @@ public:
 	FbxLoader();
 	~FbxLoader();
 
-	HRESULT LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData & outSkinnedData, std::vector<Material>& outMaterial, std::string fileName);
+	HRESULT LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& ClipName, std::vector<Material>& outMaterial, std::string fileName);
+	HRESULT LoadFBX(AnimationClip & animation, const std::string& ClipName, std::string fileName);
+	bool LoadTXT(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& clipName, std::vector<Material>& outMaterial, std::string fileName);
+	bool LoadAnimation(AnimationClip& animation, const std::string& clipName, std::string fileName);
 
 	void GetSkeletonHierarchy(FbxNode * pNode, int curIndex, int parentIndex);
-
 	void GetControlPoints(fbxsdk::FbxNode * pFbxRootNode);
-
-	void GetAnimation(FbxScene * pFbxScene, FbxNode * pFbxChildNode, std::string & outAnimationName);
-
+	void GetAnimation(FbxScene * pFbxScene, FbxNode * pFbxChildNode, std::string & outAnimationName, const std::string& ClipName);
+	void GetOnlyAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, AnimationClip& inAnimation);
 	void GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData & outSkinnedData);
-
+	void GetMaterials(FbxNode * pNode, std::vector<Material>& outMaterial);
+	void GetMaterialAttribute(FbxSurfaceMaterial * pMaterial, std::vector<Material>& outMaterial);
+	void GetMaterialTexture(FbxSurfaceMaterial * pMaterial, Material & Mat);
 	FbxAMatrix GetGeometryTransformation(FbxNode * pNode);
 
-	void GetMaterials(FbxNode * pNode, std::vector<Material>& outMaterial);
-
-	void GetMaterialAttribute(FbxSurfaceMaterial * pMaterial, std::vector<Material>& outMaterial);
-
-	void GetMaterialTexture(FbxSurfaceMaterial * pMaterial, Material & Mat);
-
+	void ExportFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& clipName, std::vector<Material>& outMaterial, std::string fileName);
+	void ExportAnimation(const AnimationClip& animation, std::string fileName, const std::string& clipName);
 private:
 	std::unordered_map<unsigned int, CtrlPoint*> mControlPoints;
 

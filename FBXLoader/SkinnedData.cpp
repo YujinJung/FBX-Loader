@@ -19,13 +19,68 @@ float BoneAnimation::GetStartTime()const
 	// Keyframes are sorted by time, so first keyframe gives start time.
 	return Keyframes.front().TimePos;
 }
-
 float BoneAnimation::GetEndTime()const
 {
 	// Keyframes are sorted by time, so last keyframe gives end time.
 	float f = Keyframes.back().TimePos;
 
 	return f;
+}
+float AnimationClip::GetClipStartTime()const
+{
+	// Find smallest start time over all bones in this clip.
+	float t = MathHelper::Infinity;
+	for (UINT i = 0; i < BoneAnimations.size(); ++i)
+	{
+		t = MathHelper::Min(t, BoneAnimations[i].GetStartTime());
+	}
+
+	return t;
+}
+float AnimationClip::GetClipEndTime()const
+{
+	// Find largest end time over all bones in this clip.
+	float t = 0.0f;
+	for (UINT i = 0; i < BoneAnimations.size(); ++i)
+	{
+		t = MathHelper::Max(t, BoneAnimations[i].GetEndTime());
+	}
+
+	return t;
+}
+float SkinnedData::GetClipStartTime(const std::string& clipName)const
+{
+	auto clip = mAnimations.find(clipName);
+	return clip->second.GetClipStartTime();
+}
+float SkinnedData::GetClipEndTime(const std::string& clipName)const
+{
+	auto clip = mAnimations.find(clipName);
+	return clip->second.GetClipEndTime();
+}
+std::string SkinnedData::GetAnimationName(int num) const
+{
+	return mAnimationName.at(num);
+}
+UINT SkinnedData::BoneCount()const
+{
+	return (UINT)mBoneHierarchy.size();
+}
+std::vector<int> SkinnedData::GetBoneHierarchy() const
+{
+	return mBoneHierarchy;
+}
+std::vector<DirectX::XMFLOAT4X4> SkinnedData::GetBoneOffsets() const
+{
+	return mBoneOffsets;
+}
+AnimationClip SkinnedData::GetAnimation(std::string clipName) const
+{
+	return mAnimations.find(clipName)->second;
+}
+std::vector<int> SkinnedData::GetSubmeshOffset() const
+{
+	return mSubmeshOffset;
 }
 
 void BoneAnimation::Interpolate(float t, XMFLOAT4X4& M) const
@@ -77,31 +132,6 @@ void BoneAnimation::Interpolate(float t, XMFLOAT4X4& M) const
 		}
 	}
 }
-
-float AnimationClip::GetClipStartTime()const
-{
-	// Find smallest start time over all bones in this clip.
-	float t = MathHelper::Infinity;
-	for (UINT i = 0; i < BoneAnimations.size(); ++i)
-	{
-		t = MathHelper::Min(t, BoneAnimations[i].GetStartTime());
-	}
-
-	return t;
-}
-
-float AnimationClip::GetClipEndTime()const
-{
-	// Find largest end time over all bones in this clip.
-	float t = 0.0f;
-	for (UINT i = 0; i < BoneAnimations.size(); ++i)
-	{
-		t = MathHelper::Max(t, BoneAnimations[i].GetEndTime());
-	}
-
-	return t;
-}
-
 void AnimationClip::Interpolate(float t, std::vector<XMFLOAT4X4>& boneTransforms)const
 {
 	for (UINT i = 0; i < BoneAnimations.size(); ++i)
@@ -110,24 +140,8 @@ void AnimationClip::Interpolate(float t, std::vector<XMFLOAT4X4>& boneTransforms
 	}
 }
 
-float SkinnedData::GetClipStartTime(const std::string& clipName)const
-{
-	auto clip = mAnimations.find(clipName);
-	return clip->second.GetClipStartTime();
-}
-
-float SkinnedData::GetClipEndTime(const std::string& clipName)const
-{
-	auto clip = mAnimations.find(clipName);
-	return clip->second.GetClipEndTime();
-}
-
-UINT SkinnedData::BoneCount()const
-{
-	return mBoneHierarchy.size();
-}
-
-void SkinnedData::Set(std::vector<int>& boneHierarchy,
+void SkinnedData::Set(
+	std::vector<int>& boneHierarchy,
 	std::vector<XMFLOAT4X4>& boneOffsets,
 	std::unordered_map<std::string, AnimationClip>& animations)
 {
@@ -135,30 +149,22 @@ void SkinnedData::Set(std::vector<int>& boneHierarchy,
 	mBoneOffsets = boneOffsets;
 	mAnimations = animations;
 }
-
+void SkinnedData::SetAnimation(AnimationClip inAnimation, std::string ClipName)
+{
+	mAnimations[ClipName] = inAnimation;
+}
 void SkinnedData::SetAnimationName(const std::string & clipName)
 {
 	mAnimationName.push_back(clipName);
 }
-
-std::string SkinnedData::GetAnimationName(int num) const
-{
-	return mAnimationName.at(num);
-}
-
 void SkinnedData::SetSubmeshOffset(int num)
 {
 	mSubmeshOffset.push_back(num);
 }
 
-std::vector<int> SkinnedData::GetSubmeshOffset() const
-{
-	return mSubmeshOffset;
-}
-
 void SkinnedData::GetFinalTransforms(const std::string& clipName, float timePos, std::vector<XMFLOAT4X4>& finalTransforms)const
 {
-	UINT numBones = mBoneOffsets.size();
+	UINT numBones = (UINT)mBoneOffsets.size();
 
 	std::vector<XMFLOAT4X4> toParentTransforms(numBones);
 
@@ -204,25 +210,25 @@ void SkinnedData::GetFinalTransforms(const std::string& clipName, float timePos,
 	}
 }
 
-void printMatrix(const std::wstring& Name, const int& i, const DirectX::XMMATRIX &M)
-{
-	std::wstring text = Name + std::to_wstring(i) + L"\n";
-	::OutputDebugString(text.c_str());
-
-	for (int j = 0; j < 4; ++j)
-	{
-		for (int k = 0; k < 4; ++k)
-		{
-			std::wstring text =
-				std::to_wstring(M.r[j].m128_f32[k]) + L" ";
-
-			::OutputDebugString(text.c_str());
-		}
-		std::wstring text = L"\n";
-		::OutputDebugString(text.c_str());
-
-	}
-}
+//void printMatrix(const std::wstring& Name, const int& i, const DirectX::XMMATRIX &M)
+//{
+//	std::wstring text = Name + std::to_wstring(i) + L"\n";
+//	::OutputDebugString(text.c_str());
+//
+//	for (int j = 0; j < 4; ++j)
+//	{
+//		for (int k = 0; k < 4; ++k)
+//		{
+//		std::wstring text =
+//				std::to_wstring(M.r[j].m128_f32[k]) + L" ";
+//
+//		::OutputDebugString(text.c_str());		
+//		}
+//		std::wstring text = L"\n";
+//		::OutputDebugString(text.c_str());
+//
+//	}
+//}
 
 DirectX::XMFLOAT4X4 SkinnedData::getBoneOffsets(int num) const
 {

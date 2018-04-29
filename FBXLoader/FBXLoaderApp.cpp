@@ -163,7 +163,6 @@ void FBXLoaderApp::Draw(const GameTimer& gt)
 	else
 	{
 		mCommandList->SetPipelineState(mPSOs["skinnedOpaque_wireframe"].Get());
-		
 	}
 	DrawRenderItems(mCommandList.Get(), mRitems[(int)RenderLayer::SkinnedOpaque]);
 
@@ -364,6 +363,26 @@ void FBXLoaderApp::UpdateAnimationCBs(const GameTimer & gt)
 	currSkinnedCB->CopyData(0, skinnedConstants);
 }
 
+void printMatrix(const std::wstring& Name, const int& i, const DirectX::XMMATRIX &M)
+{
+	std::wstring text = Name + std::to_wstring(i) + L"\n";
+	::OutputDebugString(text.c_str());
+
+	for (int j = 0; j < 4; ++j)
+	{
+		for (int k = 0; k < 4; ++k)
+		{
+			std::wstring text =
+				std::to_wstring(M.r[j].m128_f32[k]) + L" ";
+
+			::OutputDebugString(text.c_str());
+		}
+		std::wstring text = L"\n";
+		::OutputDebugString(text.c_str());
+
+	}
+}
+
 void FBXLoaderApp::UpdateObjectShadows(const GameTimer& gt)
 {
 	int i = 0;
@@ -379,6 +398,8 @@ void FBXLoaderApp::UpdateObjectShadows(const GameTimer& gt)
 		XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
 		XMStoreFloat4x4(&e->World, shadowWorld * S * shadowOffsetY);
 		e->NumFramesDirty = gNumFrameResources;
+
+		printMatrix(L"shadow ", i, XMLoadFloat4x4(&e->World));
 
 		++i;
 	}
@@ -532,7 +553,7 @@ void FBXLoaderApp::BuildConstantBufferViews()
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddress = skinnedCB->GetGPUVirtualAddress();
 
 			cbAddress += i * skinnedCBByteSize;
-			
+
 			// Offset to the pass cbv in the descriptor heap.
 			int heapIndex = mSkinCbvOffset + frameIndex * skinnedCount + i;
 			auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
@@ -906,15 +927,16 @@ void FBXLoaderApp::BuildFbxGeometry()
 	std::vector<SkinnedVertex> outVertices;
 	std::vector<std::uint16_t> outIndices;
 	std::vector<Material> outMaterial;
-	//std::string FileName = "../Resource/FBX/Capoeira.FBX";
-	std::string FileName = "../Resource/FBX/Boxing_male.FBX";
+	std::string FileName = "../Resource/FBX/";
+	//std::string FileName = "../Resource/FBX/Boxing_male.FBX";
+	std::string clipName = "Boxing_male"; 
 
-	fbx.LoadFBX(outVertices, outIndices, mSkinnedInfo, outMaterial, FileName);
+	fbx.LoadFBX(outVertices, outIndices, mSkinnedInfo, clipName, outMaterial, FileName);
 
 	mSkinnedModelInst = std::make_unique<SkinnedModelInstance>();
 	mSkinnedModelInst->SkinnedInfo = &mSkinnedInfo;
+	mSkinnedModelInst->ClipName =  clipName;
 	mSkinnedModelInst->FinalTransforms.resize(mSkinnedInfo.BoneCount());
-	mSkinnedModelInst->ClipName = mSkinnedInfo.GetAnimationName(0);
 	mSkinnedModelInst->TimePos = 0.0f;
 
 	if (outVertices.size() == 0)
