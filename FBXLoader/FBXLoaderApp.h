@@ -163,6 +163,7 @@ private:
 	void BuildShadersAndInputLayout();
 	void BuildShapeGeometry();
 	void BuildFbxGeometry();
+	void BuildFbxObjectGeometry();
 	void BuildMaterials();
 	void BuildPSOs();
 	void BuildFrameResources();

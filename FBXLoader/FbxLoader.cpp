@@ -15,7 +15,13 @@ FbxLoader::~FbxLoader()
 
 FbxManager * gFbxManager = nullptr;
 
-HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& clipName, std::vector<Material>& outMaterial, std::string fileName)
+HRESULT FbxLoader::LoadFBX(
+	std::vector<SkinnedVertex>& outVertexVector,
+	std::vector<uint16_t>& outIndexVector,
+	SkinnedData& outSkinnedData,
+	const std::string& clipName,
+	std::vector<Material>& outMaterial,
+	std::string fileName)
 {
 	// if exported animation exist
 	if (LoadTXT(outVertexVector, outIndexVector, outSkinnedData, clipName, outMaterial, fileName)) return S_OK;
@@ -106,7 +112,81 @@ HRESULT FbxLoader::LoadFBX(std::vector<SkinnedVertex>& outVertexVector, std::vec
 
 	return S_OK;
 }
-HRESULT FbxLoader::LoadFBX(AnimationClip & animation, const std::string& clipName, std::string fileName)
+
+
+HRESULT FbxLoader::LoadFBX(
+	std::vector<Vertex>& outVertexVector,
+	std::vector<uint16_t>& outIndexVector,
+	std::vector<Material>& outMaterial,
+	std::string fileName)
+{
+	// if exported animation exist
+	if (LoadTXT(outVertexVector, outIndexVector, outMaterial, fileName)) return S_OK;
+
+	if (gFbxManager == nullptr)
+	{
+		gFbxManager = FbxManager::Create();
+
+		FbxIOSettings* pIOsettings = FbxIOSettings::Create(gFbxManager, IOSROOT);
+		gFbxManager->SetIOSettings(pIOsettings);
+	}
+
+	FbxImporter* pImporter = FbxImporter::Create(gFbxManager, "");
+	std::string fbxFileName = fileName + ".fbx";
+	bool bSuccess = pImporter->Initialize(fbxFileName.c_str(), -1, gFbxManager->GetIOSettings());
+	if (!bSuccess) return E_FAIL;
+
+	FbxScene* pFbxScene = FbxScene::Create(gFbxManager, "");
+	bSuccess = pImporter->Import(pFbxScene);
+	if (!bSuccess) return E_FAIL;
+
+	pImporter->Destroy();
+
+	FbxAxisSystem sceneAxisSystem = pFbxScene->GetGlobalSettings().GetAxisSystem();
+	FbxAxisSystem::MayaZUp.ConvertScene(pFbxScene); // Delete?
+
+	// Convert quad to triangle
+	FbxGeometryConverter geometryConverter(gFbxManager);
+	geometryConverter.Triangulate(pFbxScene, true);
+
+	// Start to RootNode
+	FbxNode* pFbxRootNode = pFbxScene->GetRootNode();
+	if (pFbxRootNode)
+	{
+		// Bone offset, Control point, Vertex, Index Data
+		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
+		{
+			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
+			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
+			FbxNodeAttribute::EType AttributeType = pMesh->GetAttributeType();
+			if (!pMesh || !AttributeType) { continue; }
+
+			switch (AttributeType)
+			{
+			case FbxNodeAttribute::eMesh:
+
+				GetControlPoints(pFbxChildNode);
+
+				// Get Vertices and indices info
+				GetVerticesAndIndice(pMesh, outVertexVector, outIndexVector);
+
+				GetMaterials(pFbxChildNode, outMaterial);
+
+				break;
+			}
+
+		}
+	}
+
+	//ExportFBX(outVertexVector, outIndexVector, outMaterial, fileName);
+
+	return S_OK;
+}
+
+HRESULT FbxLoader::LoadFBX(
+	AnimationClip & animation,
+	const std::string& clipName,
+	std::string fileName)
 {
 	// if exported animation exist
 	if (LoadAnimation(animation, clipName, fileName)) return S_OK;
@@ -162,7 +242,14 @@ HRESULT FbxLoader::LoadFBX(AnimationClip & animation, const std::string& clipNam
 
 	return S_OK;
 }
-bool FbxLoader::LoadTXT(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& clipName, std::vector<Material>& outMaterial, std::string fileName)
+
+bool FbxLoader::LoadTXT(
+	std::vector<SkinnedVertex>& outVertexVector,
+	std::vector<uint16_t>& outIndexVector,
+	SkinnedData& outSkinnedData,
+	const std::string& clipName,
+	std::vector<Material>& outMaterial,
+	std::string fileName)
 {
 	fileName = fileName + clipName + ".txt";
 	std::ifstream fileIn(fileName);
@@ -302,7 +389,85 @@ bool FbxLoader::LoadTXT(std::vector<SkinnedVertex>& outVertexVector, std::vector
 	return false;
 }
 
-bool FbxLoader::LoadAnimation(AnimationClip& animation, const std::string& clipName, std::string fileName)
+bool FbxLoader::LoadTXT(
+	std::vector<Vertex>& outVertexVector,
+	std::vector<uint16_t>& outIndexVector,
+	std::vector<Material>& outMaterial,
+	std::string fileName)
+{
+	fileName = fileName + ".txt";
+	std::ifstream fileIn(fileName);
+
+	uint32_t vertexSize, indexSize;
+	uint32_t boneSize, keyframeSize;
+	uint32_t materialSize;
+
+	std::string ignore;
+	if (fileIn)
+	{
+		fileIn >> ignore >> vertexSize;
+		fileIn >> ignore >> indexSize;
+		fileIn >> ignore >> materialSize;
+
+		if (vertexSize == 0 || indexSize == 0
+			|| boneSize == 0 || keyframeSize == 0 || materialSize == 0)
+			return false;
+
+		// Vertex Data
+		for (int i = 0; i < vertexSize; ++i)
+		{
+			Vertex vertex;
+			int temp[4];
+			fileIn >> ignore >> vertex.Pos.x >> vertex.Pos.y >> vertex.Pos.z;
+			fileIn >> ignore >> vertex.Normal.x >> vertex.Normal.y >> vertex.Normal.z;
+			fileIn >> ignore >> vertex.TexC.x >> vertex.TexC.y;
+
+			// push_back
+			outVertexVector.push_back(vertex);
+		}
+
+		// Index Data
+		fileIn >> ignore;
+		for (int i = 0; i < indexSize; ++i)
+		{
+			uint16_t index;
+			fileIn >> index;
+			outIndexVector.push_back(index);
+		}
+
+		// Material Data
+		fileIn >> ignore;
+		for (int i = 0; i < materialSize; ++i)
+		{
+			Material tempMaterial;
+
+			fileIn >> ignore >> tempMaterial.Name;
+			fileIn >> ignore >> tempMaterial.Ambient.x >> tempMaterial.Ambient.y >> tempMaterial.Ambient.z;
+			fileIn >> ignore >> tempMaterial.DiffuseAlbedo.x >> tempMaterial.DiffuseAlbedo.y >> tempMaterial.DiffuseAlbedo.z;
+			fileIn >> ignore >> tempMaterial.FresnelR0.x >> tempMaterial.FresnelR0.y >> tempMaterial.FresnelR0.z;
+			fileIn >> ignore >> tempMaterial.Specular.x >> tempMaterial.Specular.y >> tempMaterial.Specular.z;
+			fileIn >> ignore >> tempMaterial.Emissive.x >> tempMaterial.Emissive.y >> tempMaterial.Emissive.z;
+			fileIn >> ignore >> tempMaterial.Roughness;
+			for (int i = 0; i < 4; ++i)
+			{
+				for (int j = 0; j < 4; ++j)
+				{
+					fileIn >> tempMaterial.MatTransform.m[i][j];
+				}
+			}
+			outMaterial.push_back(tempMaterial);
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+bool FbxLoader::LoadAnimation(
+	AnimationClip& animation, 
+	const std::string& clipName, 
+	std::string fileName)
 {
 	fileName = fileName + clipName + ".txt";
 	std::ifstream fileIn(fileName);
@@ -336,6 +501,7 @@ bool FbxLoader::LoadAnimation(AnimationClip& animation, const std::string& clipN
 	return false;
 }
 
+
 void FbxLoader::GetSkeletonHierarchy(FbxNode * pNode, int curIndex, int parentIndex)
 {
 	mBoneHierarchy.push_back(parentIndex);
@@ -346,7 +512,8 @@ void FbxLoader::GetSkeletonHierarchy(FbxNode * pNode, int curIndex, int parentIn
 		GetSkeletonHierarchy(pNode->GetChild(i), mBoneHierarchy.size(), curIndex);
 	}
 }
-void FbxLoader::GetControlPoints(fbxsdk::FbxNode * pFbxRootNode)
+
+void FbxLoader::GetControlPoints(FbxNode * pFbxRootNode)
 {
 	FbxMesh * pCurrMesh = (FbxMesh*)pFbxRootNode->GetNodeAttribute();
 
@@ -364,7 +531,13 @@ void FbxLoader::GetControlPoints(fbxsdk::FbxNode * pFbxRootNode)
 		mControlPoints[i] = currCtrlPoint;
 	}
 }
-void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::string &outAnimationName, const std::string& ClipName)
+
+
+void FbxLoader::GetAnimation(
+	FbxScene* pFbxScene, 
+	FbxNode * pFbxChildNode, 
+	std::string &outAnimationName, 
+	const std::string& ClipName)
 {
 	FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
 	FbxAMatrix geometryTransform = GetGeometryTransformation(pFbxChildNode);
@@ -420,8 +593,8 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 			for (uint32_t i = 0; i < pCurrCluster->GetControlPointIndicesCount(); ++i)
 			{
 				BoneIndexAndWeight currBoneIndexAndWeight;
-				currBoneIndexAndWeight.vBoneIndices = currJointIndex;
-				currBoneIndexAndWeight.vBoneWeight = pCurrCluster->GetControlPointWeights()[i];
+				currBoneIndexAndWeight.mBoneIndices = currJointIndex;
+				currBoneIndexAndWeight.mBoneWeight = pCurrCluster->GetControlPointWeights()[i];
 
 				mControlPoints[controlPointIndices[i]]->mBoneInfo.push_back(currBoneIndexAndWeight);
 				mControlPoints[controlPointIndices[i]]->mBoneName = currJointName;
@@ -513,8 +686,8 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 	}
 
 	BoneIndexAndWeight currBoneIndexAndWeight;
-	currBoneIndexAndWeight.vBoneIndices = 0;
-	currBoneIndexAndWeight.vBoneWeight = 0;
+	currBoneIndexAndWeight.mBoneIndices = 0;
+	currBoneIndexAndWeight.mBoneWeight = 0;
 	for (auto itr = mControlPoints.begin(); itr != mControlPoints.end(); ++itr)
 	{
 		for (unsigned int i = itr->second->mBoneInfo.size(); i <= 4; ++i)
@@ -525,7 +698,11 @@ void FbxLoader::GetAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, std::
 
 	mAnimations[ClipName] = animation;
 }
-void FbxLoader::GetOnlyAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, AnimationClip& inAnimation)
+
+void FbxLoader::GetOnlyAnimation(
+	FbxScene* pFbxScene,
+	FbxNode * pFbxChildNode,
+	AnimationClip& inAnimation)
 {
 	FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
 	FbxAMatrix geometryTransform = GetGeometryTransformation(pFbxChildNode);
@@ -644,7 +821,12 @@ void FbxLoader::GetOnlyAnimation(FbxScene* pFbxScene, FbxNode * pFbxChildNode, A
 	inAnimation = animation;
 }
 
-void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<SkinnedVertex> & outVertexVector, std::vector<uint16_t> & outIndexVector, SkinnedData& outSkinnedData)
+
+void FbxLoader::GetVerticesAndIndice(
+	FbxMesh * pMesh, 
+	std::vector<SkinnedVertex> & outVertexVector,
+	std::vector<uint16_t> & outIndexVector,
+	SkinnedData& outSkinnedData)
 {
 	// Vertex and Index
 	std::unordered_map<std::string, std::vector<uint16_t>> IndexVector;
@@ -754,18 +936,18 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 					if (l >= 4)
 						break;
 
-					SkinnedVertexInfo.BoneIndices[l] = CurrCtrlPoint->mBoneInfo[l].vBoneIndices;
+					SkinnedVertexInfo.BoneIndices[l] = CurrCtrlPoint->mBoneInfo[l].mBoneIndices;
 
 					switch (l)
 					{
 					case 0:
-						SkinnedVertexInfo.BoneWeights.x = CurrCtrlPoint->mBoneInfo[l].vBoneWeight;
+						SkinnedVertexInfo.BoneWeights.x = CurrCtrlPoint->mBoneInfo[l].mBoneWeight;
 						break;
 					case 1:
-						SkinnedVertexInfo.BoneWeights.y = CurrCtrlPoint->mBoneInfo[l].vBoneWeight;
+						SkinnedVertexInfo.BoneWeights.y = CurrCtrlPoint->mBoneInfo[l].mBoneWeight;
 						break;
 					case 2:
-						SkinnedVertexInfo.BoneWeights.z = CurrCtrlPoint->mBoneInfo[l].vBoneWeight;
+						SkinnedVertexInfo.BoneWeights.z = CurrCtrlPoint->mBoneInfo[l].mBoneWeight;
 						break;
 					}
 				}
@@ -787,58 +969,147 @@ void FbxLoader::GetVerticesAndIndice(fbxsdk::FbxMesh * pMesh, std::vector<Skinne
 	}
 }
 
+void FbxLoader::GetVerticesAndIndice(
+	FbxMesh * pMesh,
+	std::vector<Vertex> & outVertexVector,
+	std::vector<uint16_t> & outIndexVector)
+{
+	// Vertex and Index
+	std::unordered_map<Vertex, uint16_t> IndexMapping;
+	uint32_t VertexIndex = 0;
+
+	// Material
+	FbxLayerElementArrayTemplate<int>* MaterialIndices;
+	FbxGeometryElement::EMappingMode MaterialMappingMode = FbxGeometryElement::eNone;
+	MaterialIndices = &(pMesh->GetElementMaterial()->GetIndexArray());
+	MaterialMappingMode = pMesh->GetElementMaterial()->GetMappingMode();
+
+	uint32_t tCount = pMesh->GetPolygonCount(); // Triangle
+	bool isSameCount = MaterialIndices->GetCount() == tCount;
+
+	for (int i = 0; i < tCount; ++i)
+	{
+		// Vertex and Index info
+		for (int j = 0; j < 3; ++j)
+		{
+			int controlPointIndex = pMesh->GetPolygonVertex(i, j);
+			CtrlPoint* CurrCtrlPoint = mControlPoints[controlPointIndex];
+
+			// Normal
+			FbxVector4 pNormal;
+			pMesh->GetPolygonVertexNormal(i, j, pNormal);
+
+			// UV
+			float * lUVs = NULL;
+			FbxStringList lUVNames;
+			pMesh->GetUVSetNames(lUVNames);
+			const char * lUVName = NULL;
+			if (lUVNames.GetCount())
+			{
+				lUVName = lUVNames[0];
+			}
+
+			FbxVector2 pUVs;
+			bool bUnMappedUV;
+			if (!pMesh->GetPolygonVertexUV(i, j, lUVName, pUVs, bUnMappedUV))
+			{
+				MessageBox(0, L"UV not found", 0, 0);
+			}
+
+			Vertex Temp;
+			// Position
+			Temp.Pos.x = CurrCtrlPoint->mPosition.x;
+			Temp.Pos.y = CurrCtrlPoint->mPosition.y;
+			Temp.Pos.z = CurrCtrlPoint->mPosition.z;
+
+			// Normal
+			Temp.Normal.x = pNormal.mData[0];
+			Temp.Normal.y = pNormal.mData[1];
+			Temp.Normal.z = pNormal.mData[2];
+
+			// UV
+			Temp.TexC.x = pUVs.mData[0];
+			Temp.TexC.y = 1.0f - pUVs.mData[1];
+
+			// push vertex and index
+			auto lookup = IndexMapping.find(Temp);
+			if (lookup != IndexMapping.end())
+			{
+				// Index
+				outIndexVector.push_back(lookup->second);
+			}
+			else
+			{
+				// Index
+				outIndexVector.push_back(VertexIndex);
+				IndexMapping[Temp] = VertexIndex;
+
+				VertexIndex++;
+				outVertexVector.push_back(Temp);
+			}
+		}
+
+	}
+}
+
+
 void FbxLoader::GetMaterials(FbxNode* pNode, std::vector<Material>& outMaterial)
 {
 	uint32_t MaterialCount = pNode->GetMaterialCount();
 
 	for (int i = 0; i < MaterialCount; ++i)
 	{
+		Material tempMaterial;
 		FbxSurfaceMaterial* SurfaceMaterial = pNode->GetMaterial(i);
-		GetMaterialAttribute(SurfaceMaterial, outMaterial);
-		GetMaterialTexture(SurfaceMaterial, outMaterial[i]);
+		GetMaterialAttribute(SurfaceMaterial, tempMaterial);
+		GetMaterialTexture(SurfaceMaterial, tempMaterial);
+
+		if (tempMaterial.Name != "")
+		{
+			outMaterial.push_back(tempMaterial);
+		}
 	}
 }
-void FbxLoader::GetMaterialAttribute(FbxSurfaceMaterial* pMaterial, std::vector<Material>& outMaterial)
+
+void FbxLoader::GetMaterialAttribute(FbxSurfaceMaterial* pMaterial, Material& outMaterial)
 {
 	FbxDouble3 double3;
 	FbxDouble double1;
 	if (pMaterial->GetClassId().Is(FbxSurfacePhong::ClassId))
 	{
-		Material currMaterial;
-
 		// Amibent Color
 		double3 = reinterpret_cast<FbxSurfacePhong *>(pMaterial)->Ambient;
-		currMaterial.Ambient.x = static_cast<float>(double3.mData[0]);
-		currMaterial.Ambient.y = static_cast<float>(double3.mData[1]);
-		currMaterial.Ambient.z = static_cast<float>(double3.mData[2]);
+		outMaterial.Ambient.x = static_cast<float>(double3.mData[0]);
+		outMaterial.Ambient.y = static_cast<float>(double3.mData[1]);
+		outMaterial.Ambient.z = static_cast<float>(double3.mData[2]);
 
 		// Diffuse Color
 		double3 = reinterpret_cast<FbxSurfacePhong *>(pMaterial)->Diffuse;
-		currMaterial.DiffuseAlbedo.x = static_cast<float>(double3.mData[0]);
-		currMaterial.DiffuseAlbedo.y = static_cast<float>(double3.mData[1]);
-		currMaterial.DiffuseAlbedo.z = static_cast<float>(double3.mData[2]);
+		outMaterial.DiffuseAlbedo.x = static_cast<float>(double3.mData[0]);
+		outMaterial.DiffuseAlbedo.y = static_cast<float>(double3.mData[1]);
+		outMaterial.DiffuseAlbedo.z = static_cast<float>(double3.mData[2]);
 
 		// Roughness 
 		double1 = reinterpret_cast<FbxSurfacePhong *>(pMaterial)->Shininess;
-		currMaterial.Roughness = 1 - double1;
+		outMaterial.Roughness = 1 - double1;
 
 		// Reflection
 		double3 = reinterpret_cast<FbxSurfacePhong *>(pMaterial)->Reflection;
-		currMaterial.FresnelR0.x = static_cast<float>(double3.mData[0]);
-		currMaterial.FresnelR0.y = static_cast<float>(double3.mData[1]);
-		currMaterial.FresnelR0.z = static_cast<float>(double3.mData[2]);
+		outMaterial.FresnelR0.x = static_cast<float>(double3.mData[0]);
+		outMaterial.FresnelR0.y = static_cast<float>(double3.mData[1]);
+		outMaterial.FresnelR0.z = static_cast<float>(double3.mData[2]);
 
 		// Specular Color
 		double3 = reinterpret_cast<FbxSurfacePhong *>(pMaterial)->Specular;
-		currMaterial.Specular.x = static_cast<float>(double3.mData[0]);
-		currMaterial.Specular.y = static_cast<float>(double3.mData[1]);
-		currMaterial.Specular.z = static_cast<float>(double3.mData[2]);
+		outMaterial.Specular.x = static_cast<float>(double3.mData[0]);
+		outMaterial.Specular.y = static_cast<float>(double3.mData[1]);
+		outMaterial.Specular.z = static_cast<float>(double3.mData[2]);
 
 		// Emissive Color
 		double3 = reinterpret_cast<FbxSurfacePhong *>(pMaterial)->Emissive;
-		currMaterial.Emissive.x = static_cast<float>(double3.mData[0]);
-		currMaterial.Emissive.y = static_cast<float>(double3.mData[1]);
-		currMaterial.Emissive.z = static_cast<float>(double3.mData[2]);
+		outMaterial.Emissive.x = static_cast<float>(double3.mData[0]);
+		outMaterial.Emissive.y = static_cast<float>(double3.mData[1]);
+		outMaterial.Emissive.z = static_cast<float>(double3.mData[2]);
 
 		/*
 		// Transparency Factor
@@ -853,34 +1124,29 @@ void FbxLoader::GetMaterialAttribute(FbxSurfaceMaterial* pMaterial, std::vector<
 		// Reflection Factor
 	double1 = reinterpret_cast<FbxSurfacePhong *>(inMaterial)->ReflectionFactor;
 		currMaterial->mReflectionFactor = double1;	*/
-
-		outMaterial.push_back(currMaterial);
 	}
 	else if (pMaterial->GetClassId().Is(FbxSurfaceLambert::ClassId))
 	{
-		Material currMaterial;
-
 		// Amibent Color
 		double3 = reinterpret_cast<FbxSurfaceLambert *>(pMaterial)->Ambient;
-		currMaterial.Ambient.x = static_cast<float>(double3.mData[0]);
-		currMaterial.Ambient.y = static_cast<float>(double3.mData[1]);
-		currMaterial.Ambient.z = static_cast<float>(double3.mData[2]);
+		outMaterial.Ambient.x = static_cast<float>(double3.mData[0]);
+		outMaterial.Ambient.y = static_cast<float>(double3.mData[1]);
+		outMaterial.Ambient.z = static_cast<float>(double3.mData[2]);
 
 		// Diffuse Color
 		double3 = reinterpret_cast<FbxSurfaceLambert *>(pMaterial)->Diffuse;
-		currMaterial.DiffuseAlbedo.x = static_cast<float>(double3.mData[0]);
-		currMaterial.DiffuseAlbedo.y = static_cast<float>(double3.mData[1]);
-		currMaterial.DiffuseAlbedo.z = static_cast<float>(double3.mData[2]);
+		outMaterial.DiffuseAlbedo.x = static_cast<float>(double3.mData[0]);
+		outMaterial.DiffuseAlbedo.y = static_cast<float>(double3.mData[1]);
+		outMaterial.DiffuseAlbedo.z = static_cast<float>(double3.mData[2]);
 
 		// Emissive Color
 		double3 = reinterpret_cast<FbxSurfaceLambert *>(pMaterial)->Emissive;
-		currMaterial.Emissive.x = static_cast<float>(double3.mData[0]);
-		currMaterial.Emissive.y = static_cast<float>(double3.mData[1]);
-		currMaterial.Emissive.z = static_cast<float>(double3.mData[2]);
-
-		outMaterial.push_back(currMaterial);
+		outMaterial.Emissive.x = static_cast<float>(double3.mData[0]);
+		outMaterial.Emissive.y = static_cast<float>(double3.mData[1]);
+		outMaterial.Emissive.z = static_cast<float>(double3.mData[2]);
 	}
 }
+
 void FbxLoader::GetMaterialTexture(FbxSurfaceMaterial * pMaterial, Material & Mat)
 {
 	unsigned int textureIndex = 0;
@@ -929,6 +1195,7 @@ void FbxLoader::GetMaterialTexture(FbxSurfaceMaterial * pMaterial, Material & Ma
 	}
 }
 
+
 FbxAMatrix FbxLoader::GetGeometryTransformation(FbxNode* pNode)
 {
 	if (!pNode)
@@ -943,7 +1210,11 @@ FbxAMatrix FbxLoader::GetGeometryTransformation(FbxNode* pNode)
 	return FbxAMatrix(lT, lR, lS);
 }
 
-void FbxLoader::ExportAnimation(const AnimationClip& animation, std::string fileName, const std::string& clipName)
+
+void FbxLoader::ExportAnimation(
+	const AnimationClip& animation,
+	std::string fileName,
+	const std::string& clipName)
 {
 	fileName = fileName + clipName + ".txt";
 	std::ofstream fileOut(fileName);
@@ -972,7 +1243,13 @@ void FbxLoader::ExportAnimation(const AnimationClip& animation, std::string file
 	}
 }
 
-void FbxLoader::ExportFBX(std::vector<SkinnedVertex>& outVertexVector, std::vector<uint16_t>& outIndexVector, SkinnedData& outSkinnedData, const std::string& clipName, std::vector<Material>& outMaterial, std::string fileName)
+void FbxLoader::ExportFBX(
+	std::vector<SkinnedVertex>& outVertexVector, 
+	std::vector<uint16_t>& outIndexVector,
+	SkinnedData& outSkinnedData,
+	const std::string& clipName,
+	std::vector<Material>& outMaterial, 
+	std::string fileName)
 {
 	fileName = fileName + clipName + ".txt";
 	std::ofstream fileOut(fileName);
@@ -1052,6 +1329,65 @@ void FbxLoader::ExportFBX(std::vector<SkinnedVertex>& outVertexVector, std::vect
 				fileOut << o.Scale.x << " " << o.Scale.y << " " << o.Scale.z << "\n";
 				fileOut << o.RotationQuat.x << " " << o.RotationQuat.y << " " << o.RotationQuat.z << " " << o.RotationQuat.w << "\n";
 			}
+		}
+
+		fileOut << "Material " << "\n";
+		for (auto & e : outMaterial)
+		{
+			fileOut << "Name " << e.Name << "\n";
+			fileOut << "Ambient " << e.Ambient.x << " " << e.Ambient.y << " " << e.Ambient.z << "\n";
+			fileOut << "Diffuse " << e.DiffuseAlbedo.x << " " << e.DiffuseAlbedo.y << " " << e.DiffuseAlbedo.z << " " << e.DiffuseAlbedo.w << "\n";
+			fileOut << "Fresnel " << e.FresnelR0.x << " " << e.FresnelR0.y << " " << e.FresnelR0.z << "\n";
+			fileOut << "Specular " << e.Specular.x << " " << e.Specular.y << " " << e.Specular.z << "\n";
+			fileOut << "Emissive " << e.Emissive.x << " " << e.Emissive.y << " " << e.Emissive.z << "\n";
+			fileOut << "Roughness " << e.Roughness << "\n";
+			fileOut << "MatTransform ";
+			for (int i = 0; i < 4; ++i)
+			{
+				for (int j = 0; j < 4; ++j)
+				{
+					fileOut << e.MatTransform.m[i][j] << " ";
+				}
+			}
+			fileOut << "\n";
+		}
+	}
+}
+
+void FbxLoader::ExportFBX(
+	std::vector<Vertex>& outVertexVector,
+	std::vector<uint16_t>& outIndexVector,
+	std::vector<Material>& outMaterial,
+	std::string fileName)
+{
+	fileName = fileName + ".txt";
+	std::ofstream fileOut(fileName);
+
+	if (outVertexVector.empty() || outIndexVector.empty()
+		|| outMaterial.empty())
+		return;
+
+	if (fileOut)
+	{
+		uint32_t vertexSize = outVertexVector.size();
+		uint32_t indexSize = outIndexVector.size();
+		uint32_t materialSize = outMaterial.size();
+
+		fileOut << "VertexSize " << vertexSize << "\n";
+		fileOut << "IndexSize " << indexSize << "\n";
+		fileOut << "MaterialSize " << materialSize << "\n";
+
+		for (auto& e : outVertexVector)
+		{
+			fileOut << "Pos " << e.Pos.x << " " << e.Pos.y << " " << e.Pos.z << "\n";
+			fileOut << "Normal " << e.Normal.x << " " << e.Normal.y << " " << e.Normal.z << "\n";
+			fileOut << "TexC " << e.TexC.x << " " << e.TexC.y << "\n";
+		}
+
+		fileOut << "Indices " << "\n";
+		for (int i = 0; i < indexSize / 3; ++i)
+		{
+			fileOut << outIndexVector[3 * i] << " " << outIndexVector[3 * i + 1] << " " << outIndexVector[3 * i + 2] << "\n";
 		}
 
 		fileOut << "Material " << "\n";

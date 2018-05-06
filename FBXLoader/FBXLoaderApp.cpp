@@ -55,6 +55,7 @@ bool FBXLoaderApp::Initialize()
 	mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	BuildFbxGeometry();
+	BuildFbxObjectGeometry();
 	LoadTextures();
 	BuildRootSignature();
 	BuildShadersAndInputLayout();
@@ -1025,6 +1026,100 @@ void FBXLoaderApp::BuildFbxGeometry()
 	}
 }
 
+void FBXLoaderApp::BuildFbxObjectGeometry()
+{
+	FbxLoader fbx;
+
+	std::vector<Vertex> outVertices;
+	std::vector<std::uint16_t> outIndices;
+	std::vector<Material> outMaterial;
+	std::string FileName = "../Resource/FBX/house";
+
+	fbx.LoadFBX(outVertices, outIndices, outMaterial, FileName);
+	
+	if (outVertices.size() == 0)
+	{
+		MessageBox(0, L"Fbx not found", 0, 0);
+		return;
+	}
+
+	UINT vCount = 0, iCount = 0;
+	vCount = outVertices.size();
+	iCount = outIndices.size();
+
+	const UINT vbByteSize = (UINT)outVertices.size() * sizeof(Vertex);
+	const UINT ibByteSize = (UINT)outIndices.size() * sizeof(std::uint16_t);
+
+	auto geo = std::make_unique<MeshGeometry>();
+	geo->Name = "Archetecture";
+
+	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), outVertices.data(), vbByteSize);
+
+	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), outIndices.data(), ibByteSize);
+
+	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), outVertices.data(), vbByteSize, geo->VertexBufferUploader);
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), outIndices.data(), ibByteSize, geo->IndexBufferUploader);
+
+	geo->VertexByteStride = sizeof(Vertex);
+	geo->IndexBufferByteSize = ibByteSize;
+	geo->VertexBufferByteSize = vbByteSize;
+	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
+
+	SubmeshGeometry houseSubmesh;
+	houseSubmesh.IndexCount = outIndices.size();
+	houseSubmesh.StartIndexLocation = 0;
+	houseSubmesh.BaseVertexLocation = 0;
+
+	geo->DrawArgs["house"] = houseSubmesh;
+
+	mGeometries[geo->Name] = std::move(geo);
+
+	// Load Texture and Material
+	int MatIndex = mMaterials.size();
+	for (int i = 0; i < outMaterial.size(); ++i)
+	{
+		// Load Texture 
+		std::string TextureName = "ArchT";
+		TextureName.push_back(i + 48);
+
+		auto Tex = std::make_unique<Texture>();
+		Tex->Name = TextureName;
+		Tex->Filename.assign(outMaterial[i].Name.begin(), outMaterial[i].Name.end());
+		ThrowIfFailed(DirectX::CreateImageDataTextureFromFile(md3dDevice.Get(),
+			mCommandList.Get(), Tex->Filename.c_str(),
+			Tex->Resource, Tex->UploadHeap));
+
+		mTextures[Tex->Name] = std::move(Tex);
+
+		int textureIndex = 0;
+		for (auto & e : mTextures)
+		{
+			std::string temp = "ArchT0";
+			if (e.second->Name == temp)
+				break;
+			++textureIndex;
+		}
+		// Load Material
+		std::string MaterialName = "ArchM";
+		MaterialName.push_back(i + 48);
+
+		auto Mat = std::make_unique<Material>();
+		Mat->Name = MaterialName;
+		Mat->MatCBIndex = MatIndex++;
+		Mat->DiffuseSrvHeapIndex = textureIndex;
+		Mat->Ambient = outMaterial[i].Ambient;
+		Mat->DiffuseAlbedo = outMaterial[i].DiffuseAlbedo;
+		Mat->FresnelR0 = outMaterial[i].FresnelR0;
+		Mat->Roughness = outMaterial[i].Roughness;
+		Mat->Specular = outMaterial[i].Specular;
+		Mat->Emissive = outMaterial[i].Emissive;
+
+		mMaterials[MaterialName] = std::move(Mat);
+	}
+}
+
 void FBXLoaderApp::LoadTextures()
 {
 	auto bricksTex = std::make_unique<Texture>();
@@ -1146,6 +1241,19 @@ void FBXLoaderApp::BuildRenderItems()
 	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
 	mRitems[(int)RenderLayer::Opaque].push_back(gridRitem.get());
 	mAllRitems.push_back(std::move(gridRitem));
+
+	auto houseRitem = std::make_unique<RenderItem>();
+	XMStoreFloat4x4(&houseRitem->World, XMMatrixScaling(0.1f, 0.1f, 0.1f) * XMMatrixRotationRollPitchYaw(-XM_PIDIV2, 0.0f, 0.0f));
+	houseRitem->TexTransform = MathHelper::Identity4x4();
+	houseRitem->ObjCBIndex = objCBIndex++;
+	houseRitem->Mat = mMaterials["ArchM0"].get();
+	houseRitem->Geo = mGeometries["Archetecture"].get();
+	houseRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	houseRitem->IndexCount = houseRitem->Geo->DrawArgs["house"].IndexCount;
+	houseRitem->StartIndexLocation = houseRitem->Geo->DrawArgs["house"].StartIndexLocation;
+	houseRitem->BaseVertexLocation = houseRitem->Geo->DrawArgs["house"].BaseVertexLocation;
+	mRitems[(int)RenderLayer::Opaque].push_back(houseRitem.get());
+	mAllRitems.push_back(std::move(houseRitem));
 
 	int BoneCount = mSkinnedInfo.BoneCount();
 	for (int i = 0; i < BoneCount - 1; ++i)
