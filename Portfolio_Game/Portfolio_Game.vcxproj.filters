@@ -1,0 +1,215 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\Source\Source\Camera\Camera.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Camera\PlayerCamera.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Character\Player\Player.cpp">
+      <Filter>Character\Player</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Character\CharacterMovement.cpp">
+      <Filter>Character</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Character\SkinnedData.cpp">
+      <Filter>Character</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Character\Character.cpp">
+      <Filter>Character</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Common\FrameResource.cpp">
+      <Filter>Common\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Material\Materials.cpp">
+      <Filter>Material</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Texture\Textures.cpp">
+      <Filter>Texuture</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Texture\FbxLoader.cpp">
+      <Filter>Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Texture\TextureLoader.cpp">
+      <Filter>Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\UI\PlayerUI.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Common\GeometryGenerator.cpp">
+      <Filter>Common\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Common\GameTimer.cpp">
+      <Filter>Common\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Common\d3dApp.cpp">
+      <Filter>Common\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Common\d3dUtil.cpp">
+      <Filter>Common\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Common\MathHelper.cpp">
+      <Filter>Common\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Common\Utility.cpp">
+      <Filter>Common\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Portfolio_Game.cpp">
+      <Filter>Main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Common\FBXGenerator.cpp">
+      <Filter>Common\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Texture\DDSTextureLoader12.cpp">
+      <Filter>Loader</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Source\Font\Font.cpp">
+      <Filter>Font</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Source\Header\PlayerCamera.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Camera.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Player.h">
+      <Filter>Character\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\CharacterMovement.h">
+      <Filter>Character</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Character.h">
+      <Filter>Character</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\FbxLoader.h">
+      <Filter>Loader</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\TextureLoader.h">
+      <Filter>Loader</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\PlayerUI.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Textures.h">
+      <Filter>Texuture</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Materials.h">
+      <Filter>Material</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\FrameResource.h">
+      <Filter>Common\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\GeometryGenerator.h">
+      <Filter>Common\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\VertexHash.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Common\GameTimer.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Common\MathHelper.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Common\UploadBuffer.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Common\Utility.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Common\d3dApp.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Common\d3dUtil.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Common\d3dx12.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\SkinnedData.h">
+      <Filter>Character</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\RenderItem.h">
+      <Filter>Common\Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Portfolio_Game.h">
+      <Filter>Main</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\FBXGenerator.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\DDSTextureLoader12.h">
+      <Filter>Loader</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Header\Font.h">
+      <Filter>Font</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Main">
+      <UniqueIdentifier>{9674d960-b4fe-4e72-b2f9-163c4d230624}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Camera">
+      <UniqueIdentifier>{3c88ab36-06df-4b5f-a5cb-22bddc3490c2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Character">
+      <UniqueIdentifier>{c673a76b-aa51-4651-861a-6f9f57ab1979}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Material">
+      <UniqueIdentifier>{68cc8109-b99c-42e9-a841-cff9e7fac48c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Texuture">
+      <UniqueIdentifier>{301cb999-b9c4-478c-802f-164c4d23f2ba}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Loader">
+      <UniqueIdentifier>{ba394a4a-292d-466e-8fd5-a2931423b16b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{53db74a3-09d0-4095-bfdd-dfc4583cd2a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{d88d9d23-2c5c-4e39-8129-cf6acc89f19f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Header Files">
+      <UniqueIdentifier>{898abe6d-a410-43d7-8f37-0e551c4f1219}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Source Files">
+      <UniqueIdentifier>{9f0bcf5a-4858-4374-afe4-6b42b44ebe37}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Character\Player">
+      <UniqueIdentifier>{cafad2ae-01a3-4745-a649-f875a324c584}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Font">
+      <UniqueIdentifier>{5c065af9-0883-4a5c-a5c0-d433e27b36c3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Shader">
+      <UniqueIdentifier>{2cb37912-9df9-4a27-b862-fc2aad9be964}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Resource\Textures\myfile.spritefont" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="..\Shaders\Default.hlsl">
+      <Filter>Common\Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Shaders\LightingUtil.hlsl">
+      <Filter>Common\Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Shaders\Monster.hlsl">
+      <Filter>Common\Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Shaders\Sky.hlsl">
+      <Filter>Common\Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Shaders\UI.hlsl">
+      <Filter>Common\Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Shaders\Common.hlsl">
+      <Filter>Common\Shader</Filter>
+    </FxCompile>
+  </ItemGroup>
+</Project>

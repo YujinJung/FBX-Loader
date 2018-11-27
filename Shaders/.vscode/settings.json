@@ -1,0 +1,5 @@
+{
+    "editor.fontFamily": "'Jeju_mix', monaco, 'Courier New', monospace",
+    "markdown.preview.fontFamily": "Jeju_mix, -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'HelveticaNeue-Light', 'Ubuntu', 'Droid Sans', sans-serif",
+    "terminal.integrated.fontFamily": "monaco"
+}
